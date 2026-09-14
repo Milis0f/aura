@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="fr" data-accent="amber">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a0d12">
+<meta name="color-scheme" content="dark">
+<title>Aura</title>
+<link rel="icon" href="/remote/icon.svg" type="image/svg+xml">
+<link rel="preload" href="/shared/fonts/geist-latin-wght.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/shared/tokens.css">
+<link rel="stylesheet" href="/web/web.css">
+<script src="/shared/icons.js"></script>
+<script src="/vendor/qrcode.js"></script>
+<script type="module" src="/web/js/app.js"></script>
+</head>
+<body>
+<div class="aura-ground" aria-hidden="true"></div>
+
+<!-- ================= Connexion / premier compte ================= -->
+<section id="gate" class="gate" hidden>
+  <div class="gate-shell">
+    <div class="gate-story">
+      <div class="gate-mark" aria-hidden="true"><span></span><span></span><span></span></div>
+      <h1>Aura</h1>
+      <p class="gate-lede">Tes films, tes séries, tes disques et la télé du salon, au même endroit.</p>
+      <ul class="gate-points">
+        <li><span data-icon="usb"></span><div><b>Branche un disque</b><small>Aura le voit, trouve les films et les range tout seul.</small></div></li>
+        <li><span data-icon="tv"></span><div><b>Lis où tu veux</b><small>Sur la TV en un geste, ou ici même, avec reprise de lecture.</small></div></li>
+        <li><span data-icon="shield"></span><div><b>Tes fichiers protégés</b><small>Compte, double authentification, journal d'activité.</small></div></li>
+      </ul>
+      <a class="gate-remote" href="/remote/"><span data-icon="remote"></span>Télécommande sans compte</a>
+    </div>
+
+    <form class="gate-card" id="loginForm" hidden>
+      <h2>Connexion</h2>
+      <p class="gate-sub">Accède à ta bibliothèque, tes fichiers et tes téléchargements.</p>
+      <label class="field"><span>Identifiant</span>
+        <input name="username" autocomplete="username" required autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="next"></label>
+      <label class="field"><span>Mot de passe</span>
+        <span class="pw"><input name="password" type="password" autocomplete="current-password" required enterkeyhint="go">
+          <button type="button" class="pw-eye" data-eye aria-label="Afficher le mot de passe"><span data-icon="eye"></span></button></span></label>
+      <label class="field" id="totpField" hidden><span>Code à 6 chiffres</span>
+        <input name="totp" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="6" placeholder="000000" enterkeyhint="go"></label>
+      <button class="btn primary wide" type="submit">Se connecter</button>
+      <p class="form-error" role="alert" hidden></p>
+      <p class="gate-foot num" data-version></p>
+    </form>
+
+    <form class="gate-card" id="setupForm" hidden>
+      <h2>Bienvenue</h2>
+      <p class="gate-sub">Crée le compte du propriétaire. Il pourra ajouter d'autres comptes ensuite.</p>
+      <label class="field"><span>Identifiant</span>
+        <input name="username" autocomplete="username" required autocapitalize="none" autocorrect="off" spellcheck="false" minlength="2" maxlength="32"></label>
+      <label class="field"><span>Mot de passe</span>
+        <span class="pw"><input name="password" type="password" autocomplete="new-password" required minlength="12">
+          <button type="button" class="pw-eye" data-eye aria-label="Afficher le mot de passe"><span data-icon="eye"></span></button></span>
+        <small class="help">12 caractères minimum. Une phrase courte marche très bien.</small></label>
+      <label class="field"><span>Confirme</span><input name="confirm" type="password" autocomplete="new-password" required></label>
+      <button class="btn primary wide" type="submit">Créer le compte</button>
+      <p class="form-error" role="alert" hidden></p>
+      <p class="gate-foot num" data-version></p>
+    </form>
+  </div>
+</section>
+
+<!-- ================= Application ================= -->
+<div id="app" class="app" hidden>
+  <header class="topbar">
+    <button class="menu-btn" id="menuBtn" aria-label="Menu"><span data-icon="menu"></span></button>
+    <div class="brand"><span class="pulse" id="pulse"></span><span class="brand-name">Aura</span></div>
+    <div class="searchwrap">
+      <span class="search-ic" data-icon="search"></span>
+      <input id="search" placeholder="Rechercher un film, une série" autocomplete="off" spellcheck="false" enterkeyhint="search">
+      <button class="search-x" id="searchClear" hidden aria-label="Effacer"><span data-icon="close"></span></button>
+    </div>
+    <button class="now-pill" id="nowPill" hidden><span class="live-dot"></span><span class="now-text"></span></button>
+    <div class="throughput" id="throughput" hidden>
+      <span class="tp-item"><span data-icon="download"></span><b id="tpDown" class="num">0</b><small>Mo/s</small></span>
+      <span class="tp-item"><span data-icon="upload"></span><b id="tpUp" class="num">0</b><small>Mo/s</small></span>
+    </div>
+    <div class="topbar-actions">
+      <a class="btn ghost" id="jellyLink" href="#" target="_blank" rel="noopener" hidden>Jellyfin</a>
+      <a class="btn ghost icon-only" href="/remote/" aria-label="Télécommande" title="Télécommande"><span data-icon="remote"></span></a>
+      <button class="btn ghost icon-only" id="settingsBtn" aria-label="Réglages" title="Réglages"><span data-icon="sliders"></span></button>
+    </div>
+  </header>
+
+  <nav class="rail" id="rail">
+    <button class="rail-btn" data-view="library"><span data-icon="film"></span><span>Bibliothèque</span></button>
+    <button class="rail-btn" data-view="drives"><span data-icon="drive"></span><span>Disques</span><em class="badge num" id="driveBadge" hidden></em></button>
+    <button class="rail-btn" data-view="files"><span data-icon="folder"></span><span>Fichiers</span></button>
+    <button class="rail-btn" data-view="downloads"><span data-icon="download"></span><span>Téléchargements</span><em class="badge num" id="dlBadge" hidden></em></button>
+    <button class="rail-btn" data-view="system"><span data-icon="gauge"></span><span>Système</span></button>
+    <div class="rail-foot">
+      <a class="rail-link" href="/remote/"><span data-icon="remote"></span><span>Télécommande TV</span></a>
+      <div class="who"><span data-icon="user"></span><span id="who"></span></div>
+      <button class="btn ghost wide" id="logoutBtn"><span data-icon="logout"></span>Se déconnecter</button>
+    </div>
+  </nav>
+  <div class="rail-scrim" id="railScrim" hidden></div>
+
+  <main class="content" id="content">
+    <section class="view" data-view="library"></section>
+    <section class="view" data-view="drives"></section>
+    <section class="view" data-view="files"></section>
+    <section class="view" data-view="downloads"></section>
+    <section class="view" data-view="system"></section>
+  </main>
+
+  <nav class="tabbar">
+    <button class="tab" data-view="library"><span data-icon="film"></span><span>Films</span></button>
+    <button class="tab" data-view="drives"><span data-icon="drive"></span><span>Disques</span></button>
+    <button class="tab" data-view="files"><span data-icon="folder"></span><span>Fichiers</span></button>
+    <button class="tab" data-view="downloads"><span data-icon="download"></span><span>Transferts</span></button>
+    <button class="tab" data-view="system"><span data-icon="gauge"></span><span>Système</span></button>
+  </nav>
+
+  <aside class="uploads" id="uploads" hidden>
+    <header><span id="upTitle">Envois</span><button class="x" id="uploadsClose" aria-label="Fermer"><span data-icon="close"></span></button></header>
+    <ul id="uploadList"></ul>
+  </aside>
+</div>
+
+<!-- ================= Réglages ================= -->
+<aside class="panel" id="settings" hidden>
+  <header><h2>Réglages</h2><button class="x" id="settingsClose" aria-label="Fermer"><span data-icon="close"></span></button></header>
+  <div class="panel-body">
+    <section class="group">
+      <h3>Apparence</h3>
+      <div class="opt"><span>Couleur d'accent<small>Aussi sur la TV et la télécommande</small></span><span class="swatches" id="swatches"></span></div>
+      <label class="opt"><span>Densité des listes</span><select id="optDensity"><option value="cosy">Confortable</option><option value="compact">Compacte</option></select></label>
+      <label class="opt"><span>Aurore animée</span><input type="checkbox" id="optAurora" class="sw"></label>
+      <label class="opt"><span>Mode téléviseur<small>Grandes cibles, navigation aux flèches</small></span><input type="checkbox" id="optTv" class="sw"></label>
+    </section>
+    <section class="group">
+      <h3>Bibliothèque</h3>
+      <label class="opt"><span>Lire par défaut</span><select id="optPlayTarget"><option value="tv">Sur la TV</option><option value="here">Sur cet appareil</option></select></label>
+      <label class="opt"><span>Enchaîner les épisodes</span><input type="checkbox" id="optAutoplay" class="sw"></label>
+      <label class="opt"><span>Monter les disques branchés<small>Détection automatique des films</small></span><input type="checkbox" id="optAutomount" class="sw"></label>
+    </section>
+    <section class="group">
+      <h3>Fichiers</h3>
+      <label class="opt"><span>Afficher les fichiers cachés</span><input type="checkbox" id="optHidden" class="sw"></label>
+      <label class="opt"><span>Confirmer avant suppression</span><input type="checkbox" id="optConfirm" class="sw"></label>
+      <label class="opt"><span>Trier par</span><select id="optSort"><option value="name">Nom</option><option value="date">Date</option><option value="size">Taille</option><option value="kind">Type</option></select></label>
+    </section>
+    <section class="group">
+      <h3>Téléchargements</h3>
+      <label class="opt"><span>Destination par défaut</span><select id="optCategory"><option value="Films">Films</option><option value="Series">Séries</option></select></label>
+      <label class="opt"><span>Rafraîchissement</span><select id="optRefresh"><option value="1500">Rapide</option><option value="3000">Normal</option><option value="8000">Économe</option></select></label>
+    </section>
+    <section class="group">
+      <h3>Sécurité</h3>
+      <div class="opt-stack">
+        <button class="btn ghost wide left" id="btnPassword"><span data-icon="key"></span>Changer mon mot de passe</button>
+        <button class="btn ghost wide left" id="btn2fa"><span data-icon="shield"></span><span id="btn2faLabel">Double authentification</span></button>
+        <button class="btn ghost wide left" id="btnSessions"><span data-icon="devices"></span>Appareils connectés</button>
+        <button class="btn ghost wide left" id="btnAudit"><span data-icon="activity"></span>Activité récente</button>
+      </div>
+    </section>
+    <p class="panel-version num" id="panelVersion"></p>
+  </div>
+</aside>
+<div class="panel-scrim" id="panelScrim" hidden></div>
+
+<!-- ================= Fiche d'un titre ================= -->
+<aside class="sheet" id="detail" hidden aria-modal="true" role="dialog"><div class="sheet-body" id="detailBody"></div></aside>
+<div class="sheet-scrim" id="detailScrim" hidden></div>
+
+<!-- ================= Lecteur ================= -->
+<div class="viewer" id="viewer" hidden>
+  <div class="viewer-top">
+    <div class="viewer-title"><span id="viewerName"></span><small id="viewerSub"></small></div>
+    <button class="btn ghost" id="viewerTv" hidden><span data-icon="tv"></span>Sur la TV</button>
+    <button class="viewer-close" id="viewerClose" aria-label="Fermer"><span data-icon="close"></span></button>
+  </div>
+  <button class="viewer-nav prev" id="viewerPrev" aria-label="Précédent"><span data-icon="chevron-left"></span></button>
+  <button class="viewer-nav next" id="viewerNext" aria-label="Suivant"><span data-icon="chevron-right"></span></button>
+  <div class="viewer-stage" id="viewerStage"></div>
+  <div class="viewer-next" id="viewerNextEp" hidden></div>
+</div>
+
+<!-- ================= Dialogue ================= -->
+<div class="modal" id="modal" hidden>
+  <form class="modal-card" id="modalForm">
+    <h2 id="modalTitle"></h2>
+    <p id="modalText" hidden></p>
+    <div id="modalSlot"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn ghost" id="modalCancel">Annuler</button>
+      <button type="submit" class="btn primary" id="modalOk">Confirmer</button>
+    </div>
+  </form>
+</div>
+
+<div class="toasts" id="toasts" aria-live="polite"></div>
+</body>
+</html>

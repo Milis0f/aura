@@ -1,0 +1,8 @@
+[Unit]
+Description=Aura self-update (git pull + dependencies + restart)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=@APP_DIR@/os/scripts/update.sh

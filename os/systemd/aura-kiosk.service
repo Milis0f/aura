@@ -1,0 +1,31 @@
+[Unit]
+Description=Aura kiosk (cage Wayland compositor + Google Chrome fullscreen)
+After=aura.service systemd-user-sessions.service seatd.service
+Wants=aura.service
+Conflicts=getty@tty1.service
+
+[Service]
+Type=simple
+User=@KIOSK_USER@
+Group=@KIOSK_USER@
+PAMName=login
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+StandardInput=tty
+StandardOutput=journal
+StandardError=journal
+Environment=XDG_SESSION_TYPE=wayland
+Environment=XDG_RUNTIME_DIR=/run/user/1001
+Environment=WLR_LIBINPUT_NO_DEVICES=1
+Environment=AURA_URL=http://127.0.0.1:8080/tv/
+ExecStartPre=/bin/sh -c 'until curl -fsS http://127.0.0.1:8080/health >/dev/null; do sleep 1; done'
+ExecStart=@APP_DIR@/os/scripts/kiosk-session.sh
+Restart=always
+RestartSec=2
+UtmpIdentifier=tty1
+UtmpMode=user
+
+[Install]
+WantedBy=graphical.target multi-user.target

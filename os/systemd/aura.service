@@ -1,0 +1,27 @@
+[Unit]
+Description=Aura backend (API, catalogue, EPG, player control)
+After=network-online.target NetworkManager.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=@APP_USER@
+Group=@APP_USER@
+WorkingDirectory=@APP_DIR@
+Environment=AURA_DATA=@DATA_DIR@
+Environment=AURA_PORT=8080
+Environment=AURA_MPV_SOCKET=/run/aura/mpv.sock
+Environment=XDG_RUNTIME_DIR=/run/user/1001
+Environment=WAYLAND_DISPLAY=wayland-0
+Environment=PULSE_SERVER=unix:/run/user/1001/pulse/native
+ExecStart=@APP_DIR@/.venv/bin/python -m aura.main
+Restart=always
+RestartSec=3
+# mpv is spawned by this service and must reach the kiosk compositor socket
+SupplementaryGroups=video audio render
+ProtectSystem=full
+ReadWritePaths=@DATA_DIR@ /run/aura
+NoNewPrivileges=false
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Aura</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#0a0d12">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<link rel="preload" href="/shared/fonts/geist-latin-wght.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/shared/tokens.css">
+<link rel="stylesheet" href="remote.css">
+<script src="/shared/icons.js"></script>
+</head>
+<body>
+<div class="aura-ground"></div>
+<header id="top">
+  <div class="brand"><span class="dot"></span>Aura</div>
+  <div id="conn" class="conn"><span class="conn-dot"></span><span class="conn-text">connexion</span></div>
+</header>
+<main id="main"></main>
+<nav id="tabs">
+  <button class="tab active" data-tab="remote"><span class="ic" data-icon="remote"></span><span>Télécommande</span></button>
+  <button class="tab" data-tab="browse"><span class="ic" data-icon="compass"></span><span>Parcourir</span></button>
+  <button class="tab" data-tab="settings"><span class="ic" data-icon="sliders"></span><span>Réglages</span></button>
+</nav>
+<div id="toast" class="toast" hidden></div>
+<div id="sheet" class="sheet" hidden><div class="sheet-inner"><div class="grabber"></div><div id="sheet-body"></div></div></div>
+<script src="remote.js"></script>
+</body>
+</html>

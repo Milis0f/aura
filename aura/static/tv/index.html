@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Aura</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preload" href="/shared/fonts/geist-latin-wght.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/shared/tokens.css">
+<link rel="stylesheet" href="tv.css">
+<script src="/shared/icons.js"></script>
+<script src="/vendor/hls.min.js"></script>
+<script src="/vendor/mpegts.js"></script>
+<script src="/vendor/qrcode.js"></script>
+</head>
+<body>
+<div id="ground" class="aura-ground"></div>
+<div id="ambient"></div>
+<div id="app">
+  <nav id="nav">
+    <div class="brand"><span class="dot"></span><span>Aura</span></div>
+    <button class="f nav-item" data-view="home"><span data-icon="home"></span><span>Accueil</span></button>
+    <button class="f nav-item" data-view="library"><span data-icon="drive"></span><span>Bibliothèque</span></button>
+    <button class="f nav-item" data-view="live"><span data-icon="tv"></span><span>Direct</span></button>
+    <button class="f nav-item" data-view="sports"><span data-icon="trophy"></span><span>Sports</span></button>
+    <button class="f nav-item" data-view="f1"><span data-icon="flag"></span><span>F1</span></button>
+    <button class="f nav-item" data-view="ufc"><span data-icon="octagon"></span><span>UFC</span></button>
+    <button class="f nav-item" data-view="movies"><span data-icon="film"></span><span>Films</span></button>
+    <button class="f nav-item" data-view="series"><span data-icon="stack"></span><span>Séries</span></button>
+    <button class="f nav-item" data-view="apps"><span data-icon="grid"></span><span>Apps</span></button>
+    <button class="f nav-item" data-view="favorites"><span data-icon="star"></span><span>Favoris</span></button>
+    <button class="f nav-item" data-view="search"><span data-icon="search"></span><span>Recherche</span></button>
+    <button class="f nav-item" data-view="settings"><span data-icon="sliders"></span><span>Réglages</span></button>
+    <div class="nav-foot"><span id="clock" class="num">--:--</span><span id="netdot" class="netdot"></span></div>
+  </nav>
+  <main id="main"></main>
+</div>
+
+<div id="player" hidden>
+  <video id="video" playsinline></video>
+  <div id="spinner" class="buffer" hidden></div>
+  <div id="osd" class="osd">
+    <div class="osd-top">
+      <img id="osd-logo" alt="">
+      <div>
+        <div id="osd-name" class="osd-name"></div>
+        <div id="osd-sub" class="osd-sub"></div>
+      </div>
+      <div id="osd-badge" class="badge live">Direct</div>
+    </div>
+    <div class="osd-bottom">
+      <div id="osd-now" class="osd-now"></div>
+      <div class="bar"><div id="osd-progress" class="bar-fill"></div></div>
+      <div class="osd-times"><span id="osd-pos"></span><span id="osd-dur"></span></div>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast" hidden></div>
+<div id="volume-osd" class="volume-osd" hidden><span data-icon="vol-up"></span><div class="vbar"><div id="vfill"></div></div><span id="vtext"></span></div>
+<div id="external" class="external" hidden>
+  <div class="ext-card"><img id="ext-poster" alt="" hidden><div class="ext-title">Lecture en cours</div><div id="ext-name"></div><div class="hint">OK pause · ◀ ▶ reculer, avancer · A audio · S sous-titres · Retour pour arrêter</div></div>
+</div>
+
+<script src="tv-library.js"></script>
+<script src="tv.js"></script>
+</body>
+</html>

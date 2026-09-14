@@ -1,0 +1,149 @@
+/* Aura — shared design tokens, fonts and primitives for the TV page, the phone remote and the web app.
+   Palette: the NAS night. Deep blue-black ground, slate surfaces, 1px lines, one accent chosen by the owner
+   (amber by default) that also tints the aurora. No pure black, no white surfaces. */
+
+@font-face {
+  font-family: "Geist";
+  src: url("/shared/fonts/geist-latin-wght.woff2") format("woff2");
+  font-weight: 100 900;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Geist Mono";
+  src: url("/shared/fonts/geist-mono-latin-wght.woff2") format("woff2");
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+:root {
+  --ground-0: #07090d;
+  --ground-1: #0a0d12;
+  --ground-2: #0e131b;
+  --surface: #111621;
+  --surface-2: #161d2a;
+  --surface-3: #1b2331;
+  --line: #1e2634;
+  --line-soft: #171e2a;
+
+  --ink: #e6eaf0;
+  --ink-2: #a6afbd;
+  --ink-3: #7e8899;
+  --ink-4: #5a6474;
+  --muted: var(--ink-3);
+  --dim: var(--ink-4);
+
+  --fill-1: rgba(148, 170, 205, 0.045);
+  --fill-2: rgba(148, 170, 205, 0.08);
+  --fill-3: rgba(148, 170, 205, 0.13);
+  --line-1: rgba(148, 170, 205, 0.11);
+  --line-2: rgba(148, 170, 205, 0.2);
+  --refract: inset 0 1px 0 rgba(200, 215, 240, 0.06);
+
+  --accent: #f2b45a;
+  --accent-hi: #ffd08a;
+  --accent-ink: #231603;
+  --accent-soft: rgba(242, 180, 90, 0.15);
+  --accent-rgb: 242, 180, 90;
+
+  --live: #ff6b6b;
+  --danger: #ff6b6b;
+  --danger-ink: #ffb4b4;
+  --ok: #4ade9b;
+  --warn: #ffb454;
+
+  --shadow-1: 0 10px 28px -14px rgba(2, 4, 8, 0.8);
+  --shadow-2: 0 30px 70px -30px rgba(2, 4, 8, 0.9);
+
+  --r: 14px;
+  --r-sm: 10px;
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --sans: "Geist", "Segoe UI Variable", system-ui, sans-serif;
+  --mono: "Geist Mono", ui-monospace, "Cascadia Mono", monospace;
+  color-scheme: dark;
+}
+
+[data-accent="cyan"] { --accent: #2dd4bf; --accent-hi: #6fe7da; --accent-ink: #04201c; --accent-soft: rgba(45, 212, 191, 0.15); --accent-rgb: 45, 212, 191; }
+[data-accent="blue"] { --accent: #4c8dff; --accent-hi: #7fb0ff; --accent-ink: #04101f; --accent-soft: rgba(76, 141, 255, 0.15); --accent-rgb: 76, 141, 255; }
+[data-accent="violet"] { --accent: #a78bfa; --accent-hi: #c4b0ff; --accent-ink: #150a2e; --accent-soft: rgba(167, 139, 250, 0.16); --accent-rgb: 167, 139, 250; }
+[data-accent="rose"] { --accent: #fb7185; --accent-hi: #ffa0ac; --accent-ink: #2c060d; --accent-soft: rgba(251, 113, 133, 0.15); --accent-rgb: 251, 113, 133; }
+[data-accent="lime"] { --accent: #a3e635; --accent-hi: #c4f06e; --accent-ink: #152003; --accent-soft: rgba(163, 230, 53, 0.14); --accent-rgb: 163, 230, 53; }
+
+/* ---- ground + aurora: one fixed layer, moved with transform only, never repainted while scrolling ---- */
+.aura-ground {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  overflow: hidden;
+  pointer-events: none;
+  background: linear-gradient(180deg, var(--ground-1) 0%, var(--ground-1) 55%, var(--ground-0) 100%);
+}
+.aura-ground::before {
+  content: "";
+  position: absolute;
+  top: -38vh;
+  left: -22%;
+  right: -22%;
+  height: 96vh;
+  background:
+    radial-gradient(38% 52% at 26% 58%, rgba(var(--accent-rgb), 0.3), transparent 70%),
+    radial-gradient(34% 46% at 70% 48%, rgba(var(--accent-rgb), 0.17), transparent 70%),
+    radial-gradient(60% 58% at 50% 62%, rgba(var(--accent-rgb), 0.09), transparent 75%);
+  opacity: calc(0.5 + var(--glow, 0) * 0.5);
+  -webkit-mask-image: linear-gradient(to bottom, #000 28%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 28%, transparent 100%);
+  transition: opacity 1.6s var(--ease);
+  animation: aura-drift 42s ease-in-out infinite alternate;
+  will-change: transform;
+}
+.aura-ground::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.2;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .8 0 0 0 0 .85 0 0 0 0 .95 0 0 0 .06 0'/></filter><rect width='180' height='180' filter='url(%23n)'/></svg>");
+}
+.no-aurora .aura-ground::before { display: none; }
+.playing .aura-ground::before { animation-play-state: paused; }
+
+/* ---- primitives ---- */
+.i { width: 1em; height: 1em; flex: 0 0 auto; display: inline-block; vertical-align: -0.14em; }
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+
+.live-dot {
+  display: inline-block;
+  width: 0.5em;
+  height: 0.5em;
+  border-radius: 50%;
+  background: currentColor;
+  animation: aura-breathe 2.4s ease-in-out infinite;
+}
+
+/* Skeletons: the highlight moves with transform, so the sweep stays on the compositor. */
+.sk {
+  position: relative;
+  overflow: hidden;
+  background: var(--fill-2);
+  border-radius: 12px;
+}
+.sk::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(200, 215, 240, 0.06), transparent);
+  animation: aura-sweep 1.6s var(--ease) infinite;
+}
+
+.rise { animation: aura-rise 0.42s var(--ease) backwards; animation-delay: calc(var(--i, 0) * 45ms); }
+
+/* Entrance motion moves only: content never depends on an animation to become visible, so a paused
+   timeline (hidden tab, throttled kiosk) still shows everything. */
+@keyframes aura-rise { from { transform: translateY(14px); } to { transform: none; } }
+@keyframes aura-sweep { to { transform: translateX(100%); } }
+@keyframes aura-breathe { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.45; transform: scale(0.82); } }
+@keyframes aura-indeterminate { from { transform: translateX(-100%); } to { transform: translateX(260%); } }
+@keyframes aura-drift { from { transform: translate3d(-4%, 0, 0) scale(1); } to { transform: translate3d(4%, 3%, 0) scale(1.08); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .rise, .sk::after, .live-dot, .aura-ground::before { animation: none; }
+}
