@@ -168,11 +168,13 @@ window.AuraTVLibrary = (tv) => {
     p.append(h("div", { class: "detail" }, h("div", {}, poster), info), extra);
     let d;
     try { d = await api(`/library/items/${encodeURIComponent(it.id)}`); } catch (e) { toast(e.message, true); return; }
-    info.append(
+    // Element.append writes null as the text "null": keep only real nodes.
+    info.append(...[
       h("div", { class: "meta" }, meta(d)),
       d.overview ? h("p", {}, d.overview) : null,
       d.online ? null : h("div", { class: "lib-callout" }, I("drive"), `Branche le disque « ${d.drives.join(" » ou « ")} » pour lire ce titre.`),
-      actions);
+      actions,
+    ].filter(Boolean));
     const play = d.play;
     if (play) {
       const label = play.resume ? `Reprendre à ${fmtDur(play.position)}` : play.episode ? `Lire ${code(play.season, play.episode)}` : "Lire";

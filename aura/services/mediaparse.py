@@ -123,13 +123,28 @@ def _smart_case(text: str) -> str:
     return " ".join(w if (i and w in _SMALL_WORDS) else w[:1].upper() + w[1:] for i, w in enumerate(words))
 
 
+_VOWEL = "aeiouyhàâäéèêëîïôöûüœAEIOUYHÀÂÄÉÈÊËÎÏÔÖÛÜŒ"
+# The next word must be a real word: "L A Confidential" (L.A.) is not "L'A".
+_ELISION = re.compile(rf"(?<![\w'])(d|l|j|qu|D|L) (?=[{_VOWEL}]\w)")
+_POSSESSIVE = re.compile(r"(?<=[A-Za-z]) s (?=[A-Za-z])")
+_NEGATION = re.compile(r"(?<=[A-Za-z])n t (?=[A-Za-z])")
+
+
+def _restore_apostrophes(text: str) -> str:
+    """Release names drop apostrophes: 'Destin d Amelie' -> "Destin d'Amelie", 'Ocean s Eleven' -> "Ocean's Eleven"."""
+    text = _ELISION.sub(r"\1'", text)
+    text = _POSSESSIVE.sub("'s ", text)
+    return _NEGATION.sub("n't ", text)
+
+
 def _tidy(text: str, release: bool) -> str:
     t = _ACRONYM.sub(lambda m: m.group(0).replace(".", ""), text)
     if release:
         t = t.replace(".", " ").replace("_", " ")
     t = re.sub(r"\(\s*\)", " ", t)
     t = re.sub(r"\s+", " ", t).strip(" -–_.,:;|")
-    return _smart_case(t)
+    t = _smart_case(t)
+    return _restore_apostrophes(t) if release else t
 
 
 def film_title(raw: str) -> tuple[str, str]:

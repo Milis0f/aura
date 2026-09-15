@@ -244,12 +244,18 @@ async def scan_drive(drive_id: str, st: AppState = Depends(state_of), _: Any = D
     return {"ok": True, "started": jobs.schedule_scan(vol, announce=True)}
 
 
+def _data_volume(st: AppState, drive_id: str) -> storage.Volume:
+    """A drive the owner may mount or eject. System partitions (EFI, root, boot) are never exposed."""
+    vol = _jobs(st).volume(drive_id)
+    if not vol or vol.system:
+        raise HTTPException(404, "Disque introuvable.")
+    return vol
+
+
 @router.post("/drives/{drive_id}/mount")
 async def mount_drive(drive_id: str, st: AppState = Depends(state_of), _: Any = Depends(guard.home_or_account)) -> dict[str, Any]:
     jobs = _jobs(st)
-    vol = jobs.volume(drive_id)
-    if not vol:
-        raise HTTPException(404, "Disque introuvable.")
+    vol = _data_volume(st, drive_id)
     ok, detail = await storage.mount(vol)
     if not ok:
         raise HTTPException(502, f"Montage impossible : {detail}")
@@ -260,9 +266,7 @@ async def mount_drive(drive_id: str, st: AppState = Depends(state_of), _: Any = 
 @router.post("/drives/{drive_id}/eject")
 async def eject_drive(drive_id: str, st: AppState = Depends(state_of), _: Any = Depends(guard.home_or_account)) -> dict[str, Any]:
     jobs = _jobs(st)
-    vol = jobs.volume(drive_id)
-    if not vol:
-        raise HTTPException(404, "Disque introuvable.")
+    vol = _data_volume(st, drive_id)
     playing = st.player.state.item_id
     if playing.startswith("lib:v"):
         current = library.playable_file(playing[4:])

@@ -19,8 +19,8 @@ StandardError=journal
 Environment=XDG_SESSION_TYPE=wayland
 Environment=XDG_RUNTIME_DIR=/run/user/1001
 Environment=WLR_LIBINPUT_NO_DEVICES=1
-Environment=AURA_URL=http://127.0.0.1:8080/tv/
-ExecStartPre=/bin/sh -c 'until curl -fsS http://127.0.0.1:8080/health >/dev/null; do sleep 1; done'
+Environment=AURA_URL=http://127.0.0.1:8000/tv/
+ExecStartPre=/bin/sh -c 'until curl -fsS http://127.0.0.1:8000/health >/dev/null; do sleep 1; done'
 ExecStart=@APP_DIR@/os/scripts/kiosk-session.sh
 Restart=always
 RestartSec=2

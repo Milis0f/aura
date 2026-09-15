@@ -5,7 +5,7 @@ set -euo pipefail
 
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 mkdir -p "$XDG_RUNTIME_DIR"
-URL="${AURA_URL:-http://127.0.0.1:8080/tv/}"
+URL="${AURA_URL:-http://127.0.0.1:8000/tv/}"
 PROFILE="$HOME/.config/aura-chrome"
 mkdir -p "$PROFILE"
 

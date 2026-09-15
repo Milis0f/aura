@@ -1,0 +1,21 @@
+// Aura's service user mounts the drives people plug in, unmounts them and powers them off before removal.
+// The backend filters out system partitions (EFI, root, boot) before it ever calls udisksctl.
+// Installed by os/install.sh with @APP_USER@ replaced.
+polkit.addRule(function (action, subject) {
+  if (subject.user !== "@APP_USER@") {
+    return polkit.Result.NOT_HANDLED;
+  }
+  var allowed = [
+    "org.freedesktop.udisks2.filesystem-mount",
+    "org.freedesktop.udisks2.filesystem-mount-other-seat",
+    "org.freedesktop.udisks2.filesystem-mount-system",
+    "org.freedesktop.udisks2.filesystem-unmount-others",
+    "org.freedesktop.udisks2.eject-media",
+    "org.freedesktop.udisks2.eject-media-other-seat",
+    "org.freedesktop.udisks2.eject-media-system",
+    "org.freedesktop.udisks2.power-off-drive",
+    "org.freedesktop.udisks2.power-off-drive-other-seat",
+    "org.freedesktop.udisks2.power-off-drive-system"
+  ];
+  return allowed.indexOf(action.id) >= 0 ? polkit.Result.YES : polkit.Result.NOT_HANDLED;
+});

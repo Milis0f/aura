@@ -71,7 +71,8 @@ async def tvmaze_show(http: httpx.AsyncClient, title: str) -> dict[str, Any]:
     return {
         "title": r.get("name", title),
         "year": str(r.get("premiered") or "")[:4],
-        "poster": img.get("original") or img.get("medium") or "",
+        # "original" can be a 4000 px scan: decoding a row of those stalls a Mac mini's GPU for a 200 px card
+        "poster": img.get("medium") or img.get("original") or "",
         "backdrop": "",
         "overview": _clean(r.get("summary")),
         "rating": (r.get("rating") or {}).get("average"),
@@ -80,6 +81,17 @@ async def tvmaze_show(http: httpx.AsyncClient, title: str) -> dict[str, Any]:
         "trailer": "",
         "source": "tvmaze",
     }
+
+
+_WIKI_THUMB_WIDTH = re.compile(r"/\d+px-")
+
+
+def _wiki_image(summary: dict[str, Any]) -> str:
+    """A poster-sized image: the thumbnail rescaled to 500 px wide, the original only when there is no thumbnail."""
+    thumb = (summary.get("thumbnail") or {}).get("source", "")
+    if thumb:
+        return _WIKI_THUMB_WIDTH.sub("/500px-", thumb, count=1)
+    return (summary.get("originalimage") or {}).get("source", "")
 
 
 async def wikipedia_summary(http: httpx.AsyncClient, title: str, year: str = "") -> dict[str, Any]:
@@ -96,7 +108,7 @@ async def wikipedia_summary(http: httpx.AsyncClient, title: str, year: str = "")
             return {
                 "title": r.get("title", title).split(" (")[0],
                 "year": year,
-                "poster": (r.get("originalimage") or r.get("thumbnail") or {}).get("source", ""),
+                "poster": _wiki_image(r),
                 "backdrop": "",
                 "overview": r.get("extract", ""),
                 "rating": None,

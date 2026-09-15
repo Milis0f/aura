@@ -7,13 +7,16 @@
 #   sudo bash os/install.sh
 #
 # Idempotent: safe to re-run. Environment overrides: AURA_REPO, AURA_BRANCH, AURA_SRC (local path).
+# On a machine that runs NAS Dashboard v2, Aura takes its place on port 8000 and keeps its settings and accounts.
 set -euo pipefail
 
 AURA_REPO="${AURA_REPO:-https://github.com/matteo-pollo/aura.git}"
 AURA_BRANCH="${AURA_BRANCH:-main}"
 AURA_SRC="${AURA_SRC:-}"
+AURA_PORT=8000  # must match os/systemd/aura.service and aura-kiosk.service
 APP_DIR=/opt/aura
 DATA_DIR=/var/lib/aura
+ENV_FILE=/etc/aura.env
 APP_USER=aura
 KIOSK_USER=tv
 HOSTNAME_DEFAULT=aura
@@ -38,14 +41,15 @@ apt-get update -qq
 # ------------------------------------------------------------------ 2. packages
 log "Installing packages"
 apt-get install -y -qq --no-install-recommends \
-  ca-certificates curl gnupg git sudo \
+  ca-certificates curl gnupg git sudo rsync polkitd \
   python3 python3-venv python3-pip \
   network-manager avahi-daemon libnss-mdns dnsmasq-base \
   firmware-linux firmware-linux-nonfree firmware-misc-nonfree firmware-iwlwifi firmware-realtek firmware-atheros \
   firmware-brcm80211 firmware-b43-installer b43-fwcutter firmware-amd-graphics firmware-intel-sound firmware-sof-signed \
   cage seatd libgl1-mesa-dri mesa-va-drivers mesa-vulkan-drivers i965-va-driver intel-media-va-driver libva2 libva-drm2 vainfo \
   pipewire pipewire-pulse pipewire-audio wireplumber alsa-utils pulseaudio-utils \
-  mpv nodejs fonts-noto-core fonts-noto-color-emoji fonts-liberation \
+  mpv ffmpeg nodejs fonts-noto-core fonts-noto-color-emoji fonts-liberation \
+  udisks2 ntfs-3g exfatprogs dosfstools \
   xdg-utils libu2f-udev libvulkan1 unzip plymouth plymouth-themes
 
 # Google Chrome (Widevine DRM for Netflix / Prime / Canal+; Debian's chromium has no Widevine)
@@ -132,19 +136,45 @@ mkdir -p /etc/NetworkManager/dnsmasq-shared.d
 echo "address=/#/10.42.0.1" > /etc/NetworkManager/dnsmasq-shared.d/aura-captive.conf
 systemctl enable --now NetworkManager avahi-daemon >/dev/null
 
-log "sudoers for the service and kiosk users"
+log "sudoers and polkit for the service user"
 cat > /etc/sudoers.d/aura <<EOF
 $APP_USER ALL=(root) NOPASSWD: /usr/bin/nmcli, /usr/bin/systemctl reboot, /usr/bin/systemctl poweroff, /usr/bin/systemctl restart aura-kiosk.service, /usr/bin/systemctl restart aura.service, $APP_DIR/os/scripts/update.sh
 EOF
 chmod 440 /etc/sudoers.d/aura
-# nmcli is called without sudo from python; allow the service user to control NM via polkit
-cat > /etc/polkit-1/rules.d/50-aura-nm.rules <<EOF
-polkit.addRule(function(action, subject) {
-  if (action.id.indexOf("org.freedesktop.NetworkManager.") === 0 && subject.user === "$APP_USER") {
-    return polkit.Result.YES;
-  }
-});
+# nmcli and udisksctl are called without sudo from python: polkit lets the service user drive NetworkManager,
+# and mount, unmount and power off the drives people plug in.
+mkdir -p /etc/polkit-1/rules.d
+for rule in os/polkit/*.rules; do
+  sed "s/@APP_USER@/$APP_USER/g" "$rule" > "/etc/polkit-1/rules.d/$(basename "$rule")"
+done
+
+log "NAS settings ($ENV_FILE)"
+if [[ ! -f "$ENV_FILE" ]]; then
+  cat > "$ENV_FILE" <<'EOF'
+# Aura NAS settings, read by aura.service. After a change: sudo systemctl restart aura
+#
+# Folders listed in "Fichiers", as "Name:/path" separated by commas. Plugged drives show up on their own.
+#AURA_FILE_ROOTS=Media:/srv/dev-disk-by-uuid-XXXX/Media
+# More folders for the films and series library, separated by ":"
+#AURA_LIBRARY_DIRS=/srv/dev-disk-by-uuid-XXXX/Media
+# qBittorrent Web UI for "Téléchargements" (leave the user empty when its LocalHostAuth is off)
+#AURA_QB_URL=http://127.0.0.1:8080
+#AURA_QB_USER=
+#AURA_QB_PASS=
+# auto = Secure cookie only over HTTPS, so signing in from a phone over plain home-network HTTP keeps working
+AURA_SECURE_COOKIE=auto
 EOF
+  if [[ -f /etc/nasdash.env ]]; then
+    log "Carrying over the NAS Dashboard settings from /etc/nasdash.env"
+    grep -E '^(FILE_ROOTS|MEDIA_ROOT|QB_URL|QB_USER|QB_PASS|JELLYFIN_URL|SESSION_TTL|IDLE_TTL|MAX_FAILS|LOCKOUT_SECONDS)=' /etc/nasdash.env >> "$ENV_FILE" || true
+  fi
+  chmod 600 "$ENV_FILE"
+fi
+# NAS Dashboard listens on the same port: Aura replaces it (its files and database stay where they are).
+if systemctl cat nasdash.service >/dev/null 2>&1; then
+  log "NAS Dashboard found: disabling nasdash.service, Aura takes over port $AURA_PORT"
+  systemctl disable --now nasdash.service >/dev/null 2>&1 || true
+fi
 
 log "Power / console / boot"
 # never sleep, never blank the console, quiet boot
@@ -175,9 +205,26 @@ systemd-tmpfiles --create /etc/tmpfiles.d/aura.conf
 # the kiosk session runs as user 'tv' on tty1; disable the getty there
 systemctl disable getty@tty1.service >/dev/null 2>&1 || true
 systemctl daemon-reload
-systemctl enable aura.service aura-kiosk.service aura-update.timer >/dev/null
+systemctl enable udisks2.service aura.service aura-kiosk.service aura-update.timer >/dev/null
 systemctl restart aura.service
 systemctl restart aura-kiosk.service || true
 
-log "Done. Open http://$(hostname).local:8080/ (or the IP shown on the TV) from your phone."
+# ------------------------------------------------------------------ 7. accounts
+# Accounts from a terminal, as the service user so the database keeps its owner: sudo aura-manage add <name>
+cat > /usr/local/bin/aura-manage <<EOF
+#!/bin/sh
+exec runuser -u $APP_USER -- env AURA_DATA=$DATA_DIR $APP_DIR/.venv/bin/aura-manage "\$@"
+EOF
+chmod 755 /usr/local/bin/aura-manage
+if [[ -f /var/lib/nasdash/nasdash.db ]]; then
+  # Same Argon2 hashes and 2FA secrets: people sign in to Aura with their NAS Dashboard password. Re-runs skip existing names.
+  log "Importing NAS Dashboard accounts"
+  env AURA_DATA="$DATA_DIR" "$APP_DIR/.venv/bin/aura-manage" import-nasdash /var/lib/nasdash/nasdash.db \
+    || log "warning: account import failed, retry with: sudo aura-manage import-nasdash"
+  chown -R "$APP_USER:$APP_USER" "$DATA_DIR"
+fi
+
+IP=$(hostname -I 2>/dev/null | awk '{print $1}')
+log "Done. From a phone or a computer at home: http://$(hostname).local:$AURA_PORT/ (or http://${IP:-<ip>}:$AURA_PORT/)"
+log "The first visit creates the owner account (or: sudo aura-manage add <name>). The TV remote needs no account: /remote/"
 log "Reboot recommended: sudo reboot"

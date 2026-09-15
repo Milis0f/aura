@@ -47,3 +47,11 @@ def test_films_in_series_folders_without_numbers_stay_films():
 def test_titles_that_look_like_tags_survive():
     assert film_title("Charlotte's Web (2006)") == ("Charlotte's Web", "2006")
     assert film_title("300") == ("300", "")
+
+
+def test_release_names_get_their_apostrophes_back():
+    assert parse_path("Films/Le.Fabuleux.Destin.d.Amelie.Poulain.2001.MULTI.1080p.mkv").title == "Le Fabuleux Destin d'Amelie Poulain"
+    assert film_title("L.Homme.Qui.Murmurait.a.l.Oreille.des.Chevaux.1998.FRENCH") == ("L'Homme Qui Murmurait a l'Oreille des Chevaux", "1998")
+    assert film_title("Ocean.s.Eleven.2001.1080p") == ("Ocean's Eleven", "2001")
+    assert film_title("Don.t.Look.Up.2021.MULTI") == ("Don't Look Up", "2021")
+    assert "'" not in film_title("L.A.Confidential.1997.1080p")[0]

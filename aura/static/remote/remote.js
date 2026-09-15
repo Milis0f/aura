@@ -50,7 +50,7 @@
   };
 
   const main = $("#main");
-  const state = { tab: "remote", player: {}, tvView: "", tvFocus: "", ws: null, browse: { section: "live", group: null, q: "", sport: "all" } };
+  const state = { tab: "remote", player: {}, tvView: "", tvFocus: "", ws: null, browse: { section: "library", group: null, q: "", sport: "all", libKind: "all", libQ: "" } };
 
   // ---------------------------------------------------------------- sheet
   const sheet = (build) => { const s = $("#sheet"); const b = $("#sheet-body"); b.replaceChildren(); build(b); s.hidden = false; };
@@ -92,7 +92,7 @@
         k("pause", "Pause", () => post("/player/pause").then(refreshPlayer)), k("stop", "Stop", () => post("/stop").then(refreshPlayer)),
         k("vol-down", "Moins", () => post("/remote/volume", { delta: -5 })), k("vol-up", "Plus", () => post("/remote/volume", { delta: 5 })),
         k("mute", "Muet", () => post("/remote/volume", { mute: true })), k("info", "Infos", () => key("i"))));
-      v.append(h("h2", {}, "Aller à"), h("div", { class: "keys views" }, ["home", "live", "sports", "f1", "ufc", "movies", "series", "apps"].map((vw) => h("button", { onclick: () => post("/remote/navigate/" + vw) }, { home: "Accueil", live: "Direct", sports: "Sports", f1: "F1", ufc: "UFC", movies: "Films", series: "Séries", apps: "Apps" }[vw]))));
+      v.append(h("h2", {}, "Aller à"), h("div", { class: "keys views" }, ["home", "library", "live", "sports", "f1", "ufc", "movies", "series", "apps"].map((vw) => h("button", { onclick: () => post("/remote/navigate/" + vw) }, { home: "Accueil", library: "Bibliothèque", live: "Direct", sports: "Sports", f1: "F1", ufc: "UFC", movies: "Films", series: "Séries", apps: "Apps" }[vw]))));
       main.replaceChildren(v);
       setMode(localStorage.getItem("mode") || "dpad");
       refreshPlayer();
@@ -155,10 +155,10 @@
   const renderBrowse = async () => {
     const b = state.browse;
     const v = h("div");
-    const sections = { live: "Direct", sports: "Sports", movies: "Films", series: "Séries", favorites: "Favoris", apps: "Apps", search: "Recherche" };
+    const sections = { library: "Bibliothèque", live: "Direct", sports: "Sports", movies: "Films", series: "Séries", favorites: "Favoris", apps: "Apps", search: "Recherche" };
     v.append(h("div", { class: "chips" }, Object.entries(sections).map(([k, l]) => h("button", { class: "chip" + (b.section === k ? " on" : ""), onclick: () => { b.section = k; b.group = null; renderBrowse(); } }, l))));
     const body = h("div");
-    const loading = ["movies", "series"].includes(b.section) && !(b.group || b.q || b.all) ? skel.posters() : skel.lines(6);
+    const loading = b.section === "library" || (["movies", "series"].includes(b.section) && !(b.group || b.q || b.all)) ? skel.posters() : skel.lines(6);
     v.append(body, loading);
     main.replaceChildren(v);
     try {
@@ -198,6 +198,33 @@
           d.rows.forEach((row) => { body.append(h("h2", {}, groupLabel(row.title)), h("div", { class: "hrow" }, row.items.map(posterItem))); });
           backfill(body);
         }
+      } else if (b.section === "library") {
+        const kinds = { all: "Tout", film: "Films", series: "Séries", link: "Liens" };
+        const kind = b.libKind || "all";
+        const qs = new URLSearchParams({ limit: "120" });
+        if (kind !== "all") qs.set("kind", kind);
+        if (b.libQ) qs.set("q", b.libQ);
+        const [home, d] = await Promise.all([api("/library/home"), api("/library/items?" + qs)]);
+        const tools = h("div", { class: "row", style: "margin-top:12px" },
+          h("button", { class: "btn grow", onclick: libraryScan }, I("refresh"), "Analyser les disques"),
+          h("button", { class: "btn grow", onclick: addLibraryLinkSheet }, I("link"), "Ajouter un lien"));
+        if (!home.total) {
+          const plugged = home.drives.some((x) => x.available);
+          body.append(emptyState("drive", plugged ? "Aucun film trouvé pour l'instant" : "Branche un disque dur",
+            plugged ? "Les disques branchés sont en cours d'analyse : les films et les séries apparaissent ici tout seuls."
+              : "Aura le détecte tout seul, cherche les films et les séries, et les range ici avec l'affiche et le résumé."), tools);
+          return;
+        }
+        const input = h("input", { class: "input", placeholder: "Chercher un titre…", value: b.libQ || "" });
+        let timer; input.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(() => { b.libQ = input.value.trim(); renderBrowse(); }, 400); });
+        body.append(h("div", { class: "search" }, input));
+        body.append(h("div", { class: "chips" }, Object.entries(kinds).map(([k, l]) => h("button", { class: "chip" + (k === kind ? " on" : ""), onclick: () => { b.libKind = k; renderBrowse(); } }, l))));
+        const resume = home.rows.find((r) => r.key === "continue");
+        if (resume && kind === "all" && !b.libQ) body.append(h("h2", {}, "Reprendre"), h("div", { class: "hrow" }, resume.items.map(libPoster)));
+        body.append(h("h2", {}, `${{ all: "Tous les titres", film: "Films", series: "Séries", link: "Mes liens" }[kind]} (${d.total})`));
+        body.append(d.items.length ? h("div", { class: "posters" }, d.items.map(libPoster))
+          : emptyState("search", "Rien ici", b.libQ ? "Aucun titre ne correspond à cette recherche." : "Change de filtre, ou branche le disque qui contient ces titres."));
+        body.append(tools);
       } else if (b.section === "sports") {
         const sports = { all: "Tous", football: "Foot", f1: "F1", ufc: "UFC", basketball: "Basket", boxing: "Boxe", other: "Autres" };
         body.append(h("div", { class: "chips" }, Object.entries(sports).map(([k, l]) => h("button", { class: "chip" + (b.sport === k ? " on" : ""), onclick: () => { b.sport = k; renderBrowse(); } }, l))));
@@ -221,7 +248,7 @@
         const input = h("input", { class: "input", placeholder: "Chaîne, film, série, événement…", value: b.q || "", autofocus: true });
         const res = h("div");
         let timer;
-        const run = async () => { const q = input.value.trim(); b.q = q; res.replaceChildren(); if (q.length < 2) return; const d = await api("/search?q=" + encodeURIComponent(q)); if (d.live.length) res.append(h("h2", {}, "Chaînes"), h("div", { class: "card list-card" }, d.live.map(chanItem))); if (d.sports.length) res.append(h("h2", {}, "Événements"), h("div", { class: "card list-card" }, d.sports.map((ev) => h("button", { class: "event", onclick: () => openEvent(ev) }, h("div", { class: "w" }, ev.start ? fmtTime(ev.start) : "—", h("small", {}, ev.start ? fmtDate(ev.start) : "")), h("div", {}, h("div", { class: "n" }, ev.name), h("div", { class: "l" }, ev.session)), h("span", {}))))); if (d.vod.length) res.append(h("h2", {}, "Films"), h("div", { class: "posters" }, d.vod.map(posterItem))); if (d.series.length) res.append(h("h2", {}, "Séries"), h("div", { class: "posters" }, d.series.map(posterItem))); if (!res.children.length) res.append(emptyState("search", "Rien trouvé", "Essaie un autre mot : chaîne, film, équipe ou compétition.")); };
+        const run = async () => { const q = input.value.trim(); b.q = q; res.replaceChildren(); if (q.length < 2) return; const [d, lib] = await Promise.all([api("/search?q=" + encodeURIComponent(q)), api("/library/items?limit=12&q=" + encodeURIComponent(q)).catch(() => ({ items: [] }))]); if (lib.items.length) res.append(h("h2", {}, "Sur les disques"), h("div", { class: "posters" }, lib.items.map(libPoster))); if (d.live.length) res.append(h("h2", {}, "Chaînes"), h("div", { class: "card list-card" }, d.live.map(chanItem))); if (d.sports.length) res.append(h("h2", {}, "Événements"), h("div", { class: "card list-card" }, d.sports.map((ev) => h("button", { class: "event", onclick: () => openEvent(ev) }, h("div", { class: "w" }, ev.start ? fmtTime(ev.start) : "—", h("small", {}, ev.start ? fmtDate(ev.start) : "")), h("div", {}, h("div", { class: "n" }, ev.name), h("div", { class: "l" }, ev.session)), h("span", {}))))); if (d.vod.length) res.append(h("h2", {}, "Films"), h("div", { class: "posters" }, d.vod.map(posterItem))); if (d.series.length) res.append(h("h2", {}, "Séries"), h("div", { class: "posters" }, d.series.map(posterItem))); if (!res.children.length) res.append(emptyState("search", "Rien trouvé", "Essaie un autre mot : chaîne, film, équipe ou compétition.")); };
         input.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(run, 350); });
         body.append(h("div", { class: "search" }, input), res);
         if (b.q) run();
@@ -279,6 +306,106 @@
       h("button", { class: "btn primary block", onclick: (e) => busy(e.currentTarget, async () => { await post("/mylist", { title: title.value, url: url.value, kind: kind.value }); closeSheet(); renderBrowse(); toast("Ajouté à Ma liste"); }) }, I("plus"), "Ajouter"), h("div", { class: "form-error" }));
   });
 
+  // ---------------------------------------------------------------- library (films and series found on the drives)
+  const epCode = (s, e) => `S${String(s).padStart(2, "0")}E${String(e).padStart(2, "0")}`;
+  const libPoster = (it) => {
+    const box = h("div", { class: "img" });
+    if (it.poster) box.append(h("img", { src: it.poster, alt: "", loading: "lazy", onerror: (e) => e.target.replaceWith(initials(it.title)) }));
+    else box.append(initials(it.title));
+    const r = it.resume;
+    return h("button", { class: "poster" + (it.online ? "" : " offline"), onclick: () => openLibrary(it) }, box,
+      r && !r.finished && r.progress > 0.01 ? h("div", { class: "res" }, h("i", { style: `width:${Math.round(r.progress * 100)}%` })) : null,
+      h("div", { class: "n" }, it.title));
+  };
+  const playLibrary = async (item, fileId = "", position = 0) => {
+    try {
+      await post("/library/play", { item_id: item.id, file_id: fileId, position });
+      toast(`${item.title} sur la TV`); closeSheet(); refreshPlayer();
+    } catch (e) { toast(e.message, true); }
+  };
+  const libraryScan = (e) => busy(e.currentTarget, async () => { const r = await post("/library/scan"); toast(r.scheduled ? "Analyse des disques lancée" : "Une analyse est déjà en cours"); });
+  const openLibrary = (it) => sheet(async (b) => {
+    const img = h("img", { src: it.poster || "", alt: "", onerror: (e) => (e.target.style.visibility = "hidden") });
+    const meta = h("div", { class: "meta" });
+    const actions = h("div", { class: "row", style: "gap:8px;margin:10px 0;flex-wrap:wrap" });
+    const p = h("p", {}, it.overview || "");
+    const extra = h("div");
+    b.append(h("h1", {}, it.title), h("div", { class: "cover" }, img, h("div", { class: "grow" }, meta, actions)), p, extra);
+    let d;
+    try { d = await api("/library/items/" + encodeURIComponent(it.id)); } catch (e) { p.textContent = e.message; return; }
+    if (d.poster) { img.src = d.poster; img.style.visibility = ""; }
+    const minutes = d.runtime || Math.round((d.duration || 0) / 60);
+    meta.replaceChildren(...[
+      d.year, d.kind === "series" && d.seasons ? `${d.seasons} saison${d.seasons > 1 ? "s" : ""}` : "", d.kind !== "series" && minutes ? fmtMin(minutes) : "",
+      d.rating > 0 ? rating(d.rating) : "", d.quality, ...(d.langs || []), ...(d.genres || []).slice(0, 2),
+    ].filter(Boolean).map((x) => h("span", { class: "badge pill" }, x)));
+    p.textContent = d.overview || "";
+    if (!d.online) extra.append(emptyState("drive", "Disque débranché", `Branche « ${d.drives.join(" » ou « ") || "le disque"} » pour lire ce titre.`));
+    const play = d.play;
+    if (play) {
+      const label = play.resume ? `Reprendre ${fmtDur(play.position)}` : play.episode ? `Lire ${epCode(play.season, play.episode)}` : "Lire sur la TV";
+      actions.append(h("button", { class: "btn primary grow", onclick: () => playLibrary(d, play.file_id, play.position) }, I("play"), label));
+      if (play.resume) actions.append(h("button", { class: "btn", onclick: () => playLibrary(d, play.file_id, 0) }, I("restart"), "Début"));
+    }
+    if (d.kind === "link") {
+      actions.append(h("button", { class: "btn", "aria-label": "Retirer ce lien", onclick: (e) => busy(e.currentTarget, async () => {
+        if (!confirm(`Retirer « ${d.title} » de la bibliothèque ?`)) return;
+        await api("/library/links/" + encodeURIComponent(d.id), { method: "DELETE" });
+        closeSheet(); toast("Lien retiré"); renderBrowse();
+      }) }, I("trash")));
+    }
+    if (d.kind === "series" && d.seasons_list && d.seasons_list.length) {
+      const chips = h("div", { class: "chips" });
+      const list = h("div", { class: "card list-card" });
+      const show = (season) => {
+        $$(".chip", chips).forEach((x) => x.classList.toggle("on", Number(x.dataset.s) === season.season));
+        list.replaceChildren(...season.episodes.map((ep) => h("button", {
+          class: "item" + (ep.online ? "" : " offline"),
+          onclick: () => (ep.online ? playLibrary(d, ep.id, ep.finished ? 0 : ep.position) : toast("Le disque de cet épisode est débranché", true)),
+        },
+          h("div", { class: "ph" }, ep.finished ? I("check") : String(ep.episode)),
+          h("div", { class: "grow" },
+            h("div", { class: "n" }, ep.title || `Épisode ${ep.episode}`),
+            h("div", { class: "s" }, [epCode(ep.season, ep.episode), ep.duration ? fmtMin(Math.round(ep.duration / 60)) : "", ep.position > 30 && !ep.finished ? `reprise à ${fmtDur(ep.position)}` : "", ep.online ? "" : "débranché"].filter(Boolean).join(" · "))))));
+      };
+      d.seasons_list.forEach((s) => chips.append(h("button", { class: "chip", "data-s": s.season, onclick: () => show(s) }, s.season ? `Saison ${s.season}` : "Bonus")));
+      extra.append(chips, list);
+      show(d.seasons_list.find((s) => play && s.season === play.season) || d.seasons_list[0]);
+    }
+    if (d.kind === "film" && d.versions && d.versions.length > 1) {
+      extra.append(h("h2", {}, `${d.versions.length} versions`), h("div", { class: "card list-card" }, d.versions.map((ver) => h("button", {
+        class: "item" + (ver.online ? "" : " offline"),
+        onclick: () => (ver.online ? playLibrary(d, ver.id, ver.finished ? 0 : ver.position) : toast("Disque débranché", true)),
+      },
+        h("div", { class: "grow" }, h("div", { class: "n" }, [ver.quality || "Version", ...ver.langs].join(" · ")), h("div", { class: "s" }, `${ver.drive} · ${ver.name}`)),
+        h("span", { class: "chev" }, I("play"))))));
+    }
+  });
+  const addLibraryLinkSheet = () => sheet((b) => {
+    const url = h("input", { class: "input", placeholder: "https://…/film.mp4", autocapitalize: "off", inputmode: "url" });
+    const title = h("input", { class: "input", placeholder: "Deviné depuis l'adresse si vide" });
+    b.append(h("h1", {}, "Ajouter un film par lien"),
+      h("p", { class: "muted small" }, "Une adresse http ou https vers une vidéo : le film rejoint la bibliothèque, avec affiche et reprise de lecture."),
+      field("Adresse de la vidéo", url), field("Titre", title),
+      h("div", {}, h("button", { class: "btn primary block", onclick: (e) => busy(e.currentTarget, async () => {
+        const it = await post("/library/links", { url: url.value.trim(), title: title.value.trim() });
+        closeSheet(); toast(`« ${it.title} » ajouté à la bibliothèque`);
+        state.browse.section = "library"; if (state.tab === "browse") renderBrowse();
+      }) }, I("plus"), "Ajouter"), h("div", { class: "form-error" })));
+  });
+  // Drives come and go while the phone is open: tell the user, and redraw the library if it is on screen.
+  const LIBRARY_EVENTS = new Set(["library_changed", "library_scan", "library_meta", "drive_added", "drive_removed"]);
+  let libraryTimer;
+  const libraryEvent = (m) => {
+    const label = m.drive ? m.drive.label : "";
+    if (m.type === "drive_added") toast(`Disque « ${label} » branché · recherche des films…`);
+    else if (m.type === "drive_removed") toast(`« ${label} » débranché`);
+    else if (m.type === "library_scan" && m.state === "done" && m.new_items) toast(`${m.new_items} nouveau${m.new_items > 1 ? "x titres" : " titre"} sur « ${label} »`);
+    if (m.type === "library_scan" && m.state !== "done") return;
+    if (state.tab !== "browse" || state.browse.section !== "library" || !$("#sheet").hidden) return;
+    clearTimeout(libraryTimer); libraryTimer = setTimeout(renderBrowse, 1200);
+  };
+
   // ---------------------------------------------------------------- settings
   const renderSettings = async () => {
     const v = h("div", {}, h("h1", {}, "Réglages"));
@@ -286,7 +413,7 @@
     let setup;
     try { setup = await api("/setup"); } catch (e) { v.append(h("div", { class: "empty" }, e.message)); return; }
     if (!setup.setup_done && !setup.configured) { v.append(wizard(setup)); return; }
-    v.append(h("div", { class: "card" }, h("div", { class: "row" }, h("div", { class: "grow" }, h("div", {}, h("b", {}, "Bibliothèque")), h("div", { class: "muted small" }, `${setup.counts.live} chaînes · ${setup.counts.vod} films · ${setup.counts.series} séries`)), h("button", { class: "btn", onclick: (e) => busy(e.currentTarget, async () => { await post("/refresh"); toast("Tout est à jour"); renderSettings(); }) }, I("refresh")))));
+    v.append(h("div", { class: "card" }, h("div", { class: "row" }, h("div", { class: "grow" }, h("div", {}, h("b", {}, "Catalogue")), h("div", { class: "muted small" }, `${setup.counts.live} chaînes · ${setup.counts.vod} films · ${setup.counts.series} séries`), h("div", { class: "muted small" }, `Sur les disques : ${setup.library.films} films · ${setup.library.series} séries · ${setup.library.episodes} épisodes`)), h("button", { class: "btn", onclick: (e) => busy(e.currentTarget, async () => { await post("/refresh"); toast("Tout est à jour"); renderSettings(); }) }, I("refresh")))));
     const items = [
       ["signal", "Sources IPTV", "Xtream, M3U, chaînes gratuites", sourcesSheet],
       ["guide", "Guide TV", "Programmes en cours et à venir", epgSheet],
@@ -446,7 +573,7 @@
     const ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/api/ws?role=remote");
     state.ws = ws;
     ws.onopen = () => { $(".conn-text").textContent = "connecté"; $("#conn").className = "conn on"; };
-    ws.onmessage = (ev) => { let m; try { m = JSON.parse(ev.data); } catch (_) { return; } if (m.type === "hello") { state.player = m.player || {}; } else if (m.type === "player") { state.player = m.state; } else if (m.type === "tv_view") { state.tvView = m.view; state.tvFocus = m.focus || ""; } else if (m.type === "catalog_changed" && state.tab === "browse") { renderBrowse(); return; } else return; if (state.tab === "remote") { const old = $("#now"); if (old) old.replaceWith(nowCard()); } };
+    ws.onmessage = (ev) => { let m; try { m = JSON.parse(ev.data); } catch (_) { return; } if (m.type === "hello") { state.player = m.player || {}; } else if (m.type === "player") { state.player = m.state; } else if (m.type === "tv_view") { state.tvView = m.view; state.tvFocus = m.focus || ""; } else if (m.type === "catalog_changed" && state.tab === "browse") { renderBrowse(); return; } else if (LIBRARY_EVENTS.has(m.type)) { libraryEvent(m); return; } else return; if (state.tab === "remote") { const old = $("#now"); if (old) old.replaceWith(nowCard()); } };
     ws.onclose = () => { $(".conn-text").textContent = "hors ligne"; $("#conn").className = "conn off"; setTimeout(connectWs, 2000); };
     ws.onerror = () => ws.close();
   };

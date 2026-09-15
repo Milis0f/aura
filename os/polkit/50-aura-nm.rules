@@ -1,0 +1,8 @@
+// Aura's service user drives NetworkManager (Wi-Fi, static IP, onboarding hotspot) without sudo.
+// Installed by os/install.sh with @APP_USER@ replaced.
+polkit.addRule(function (action, subject) {
+  if (action.id.indexOf("org.freedesktop.NetworkManager.") === 0 && subject.user === "@APP_USER@") {
+    return polkit.Result.YES;
+  }
+  return polkit.Result.NOT_HANDLED;
+});
