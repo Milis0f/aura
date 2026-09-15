@@ -1,4 +1,12 @@
-﻿node_modules/
+node_modules/
 .env
 dist/
 .venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+# runtime data (database, cache): never versioned
+data/
+# local Claude Code state and worktrees
+.claude/
