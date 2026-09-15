@@ -55,10 +55,18 @@ Retire la clé quand il le demande, le Mac redémarre sur Debian (écran texte n
 
 ## Étape 4 — Installer Aura (1 commande, 15 min)
 
-Connecte-toi avec `admin`, puis :
+Connecte-toi avec `admin`, puis récupère le projet depuis GitHub. Le dépôt `Milis0f/aura` est privé : `git`
+demande ton identifiant GitHub et, en guise de mot de passe, un jeton d'accès (GitHub › Settings › Developer settings ›
+Personal access tokens, droit « Contents: read » sur ce dépôt).
 
 ```bash
-sudo apt-get install -y curl && curl -fsSL https://raw.githubusercontent.com/matteo-pollo/aura/main/os/install.sh | sudo bash
+sudo apt-get install -y git && git clone https://github.com/Milis0f/aura.git /tmp/aura && sudo AURA_SRC=/tmp/aura bash /tmp/aura/os/install.sh
+```
+
+Si le dépôt devient public, une seule commande suffit :
+
+```bash
+sudo apt-get install -y curl && curl -fsSL https://raw.githubusercontent.com/Milis0f/aura/main/os/install.sh | sudo bash
 ```
 
 Sans dépôt GitHub (copie locale du projet sur une clé USB montée dans `/mnt/usb`) :

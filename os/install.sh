@@ -10,7 +10,7 @@
 # On a machine that runs NAS Dashboard v2, Aura takes its place on port 8000 and keeps its settings and accounts.
 set -euo pipefail
 
-AURA_REPO="${AURA_REPO:-https://github.com/matteo-pollo/aura.git}"
+AURA_REPO="${AURA_REPO:-https://github.com/Milis0f/aura.git}"
 AURA_BRANCH="${AURA_BRANCH:-main}"
 AURA_SRC="${AURA_SRC:-}"
 AURA_PORT=8000  # must match os/systemd/aura.service and aura-kiosk.service
