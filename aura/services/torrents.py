@@ -51,7 +51,7 @@ class QBittorrent:
             try:
                 r = await self.client.post("/api/v2/auth/login", data={"username": self.username, "password": self._password}, headers={"Referer": self.base})
             except httpx.HTTPError as exc:
-                raise TorrentError(502, f"qBittorrent injoignable ({type(exc).__name__}).") from exc
+                raise TorrentError(502, f"qBittorrent injoignable sur {self.base} ({type(exc).__name__}).") from exc
             if r.text.strip() != "Ok.":
                 self._failed_at = time.monotonic()
                 raise TorrentError(502, "qBittorrent refuse la connexion (identifiants).")
@@ -67,7 +67,7 @@ class QBittorrent:
                 await self._login()
                 r = await self.client.request(method, path, headers={"Referer": self.base}, **kwargs)
         except httpx.HTTPError as exc:
-            raise TorrentError(502, f"qBittorrent injoignable ({type(exc).__name__}).") from exc
+            raise TorrentError(502, f"qBittorrent injoignable sur {self.base} ({type(exc).__name__}).") from exc
         if r.status_code == 403:
             raise TorrentError(502, "qBittorrent refuse l'accès : vérifie l'option « Contourner l'authentification pour localhost ».")
         return r

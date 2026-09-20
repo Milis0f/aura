@@ -12,7 +12,7 @@ from starlette.websockets import WebSocketDisconnect
 from aura import cli, db
 from aura.main import create_app
 from aura.services import accounts, library_scan
-from aura.services.torrents import QBittorrent
+from aura.services.torrents import QBittorrent, TorrentError
 
 PASSWORD = "correct-horse-battery"
 LAN = ("192.168.1.30", 50000)
@@ -205,3 +205,18 @@ def test_import_nasdash_accounts(tmp_path):
     token, session = accounts.login("matteo", PASSWORD, "", "127.0.0.1", "pytest")
     assert session.can_torrent and accounts.session_from_token(token).username == "Matteo"
     assert cli.main(["import-nasdash", str(legacy)]) == 0 and accounts.user_count() == 1
+
+
+async def test_unreachable_qbittorrent_names_the_address():
+    """A wrong port is the usual cause, so the error has to say which address Aura tried."""
+
+    def refuse(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("connection refused", request=request)
+
+    client = QBittorrent("http://127.0.0.1:8080", transport=httpx.MockTransport(refuse))
+    try:
+        with pytest.raises(TorrentError) as raised:
+            await client.list()
+    finally:
+        await client.aclose()
+    assert "http://127.0.0.1:8080" in raised.value.message

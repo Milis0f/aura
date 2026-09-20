@@ -12,6 +12,7 @@ const STATES = {
 let list, magnet, category;
 let timer = null;
 let slow = false;
+let inFlight = false;
 let torrents = [];
 let lastError = "";
 
@@ -32,21 +33,22 @@ export function mount(section) {
 export function show() {
   category.value = opt.category;
   render();
-  tick();
+  if (!slow) tick();
 }
 
-export function start() { restart(); }
+export function start() { if (!timer) restart(); }
 
-function restart(interval = Number(opt.refresh) || 3000) {
+function restart(interval = Number(opt.refresh) || 3000, immediate = true) {
   clearInterval(timer);
   if (!state.canTorrent) return;
-  tick();
+  if (immediate) tick();
   timer = setInterval(tick, interval);
 }
 events.on("downloads-options", () => { slow = false; restart(); });
 
 async function tick() {
-  if (!state.canTorrent || !state.csrf || document.hidden) return;
+  if (!state.canTorrent || !state.csrf || document.hidden || inFlight) return;
+  inFlight = true;
   try {
     torrents = await api("/api/torrents");
     lastError = "";
@@ -54,7 +56,10 @@ async function tick() {
   } catch (error) {
     torrents = [];
     lastError = error.message;
-    if (!slow) { slow = true; restart(20000); }
+    // qBittorrent is down: back off to one probe every 20 s instead of hammering it every 3 s.
+    if (!slow) { slow = true; restart(20000, false); }
+  } finally {
+    inFlight = false;
   }
   const down = torrents.reduce((sum, t) => sum + (t.dl || 0), 0);
   const up = torrents.reduce((sum, t) => sum + (t.up || 0), 0);
@@ -72,7 +77,7 @@ async function tick() {
 function render() {
   if (lastError) {
     list.replaceChildren(emptyState("download", "qBittorrent ne répond pas", lastError, {
-      steps: ["Vérifie que le service tourne : systemctl status qbittorrent", "Dans qBittorrent, coche « Contourner l'authentification pour localhost »."],
+      steps: ["Vérifie que qBittorrent tourne et que son interface Web est activée (sur le boîtier : systemctl status qbittorrent).", "Dans qBittorrent › Options › Web UI : coche « Contourner l'authentification pour les clients sur localhost », ou renseigne AURA_QB_USER et AURA_QB_PASS dans /etc/aura.env."],
     }));
     return;
   }
