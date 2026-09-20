@@ -151,9 +151,15 @@ propriétaire** (12 caractères minimum, une phrase courte marche très bien). E
 - Appli web › **Fichiers** : parcourir, chercher, envoyer (bouton ou glisser-déposer), renommer, déplacer,
   supprimer. Les disques branchés apparaissent tout seuls, les dossiers permanents se déclarent dans
   `/etc/aura.env` (`AURA_FILE_ROOTS=Media:/srv/disque/Media`), puis `sudo systemctl restart aura`.
-- **Téléchargements** : Aura pilote qBittorrent s'il tourne sur la machine. Renseigne `AURA_QB_URL`,
-  `AURA_QB_USER` et `AURA_QB_PASS` dans `/etc/aura.env`. Un téléchargement terminé est analysé tout seul et
-  rejoint la bibliothèque.
+- **Téléchargements** : qBittorrent est installé et configuré par le script, rien à faire. Son interface Web
+  n'écoute que sur la machine et Aura lui parle sans mot de passe. Dans l'appli web, onglet *Téléchargements* :
+  tape ce que tu cherches, les résultats arrivent du catalogue public de l'Internet Archive (films du domaine
+  public, logiciels libres, jeux de données), tu choisis *Films* ou *Séries*, et un clic sur *Télécharger*
+  l'envoie à qBittorrent. Une fois terminé, le fichier est analysé et rejoint la bibliothèque tout seul.
+  Tu peux aussi coller un lien magnet ou une adresse `.torrent`.
+- **Ton propre indexeur** (facultatif) : si tu héberges Jackett ou Prowlarr, ajoute `AURA_INDEXER_URL` et
+  `AURA_INDEXER_KEY` dans `/etc/aura.env`, puis `sudo systemctl restart aura`. Ses résultats se mélangent à
+  ceux du catalogue public, triés par nombre de sources.
 
 ## Accès depuis l'extérieur (optionnel)
 

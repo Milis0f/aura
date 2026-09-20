@@ -1,0 +1,21 @@
+[Unit]
+Description=qBittorrent for Aura (downloads)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=@APP_USER@
+Group=@APP_USER@
+Environment=HOME=@DATA_DIR@
+# --profile keeps the configuration next to Aura's own data instead of a stray home directory.
+# The Web UI listens on localhost only: Aura is the one that talks to it.
+ExecStart=/usr/bin/qbittorrent-nox --profile=@DATA_DIR@/qbittorrent --webui-port=8080
+Restart=always
+RestartSec=5
+ProtectSystem=full
+ReadWritePaths=@DATA_DIR@ /media /mnt /srv
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

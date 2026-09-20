@@ -19,19 +19,20 @@ if [[ -d .git ]]; then
 fi
 uv pip install -q --python .venv/bin/python -e . || .venv/bin/pip install -q -e .
 # Boxes installed before the drives library still need its packages and polkit rules.
-if ! command -v udisksctl >/dev/null 2>&1 || ! command -v ffprobe >/dev/null 2>&1; then
-  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends udisks2 ntfs-3g exfatprogs dosfstools ffmpeg polkitd || true
+if ! command -v udisksctl >/dev/null 2>&1 || ! command -v ffprobe >/dev/null 2>&1 || ! command -v qbittorrent-nox >/dev/null 2>&1; then
+  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends udisks2 ntfs-3g exfatprogs dosfstools ffmpeg polkitd qbittorrent-nox || true
 fi
 mkdir -p /etc/polkit-1/rules.d
 for rule in os/polkit/*.rules; do
   sed "s/@APP_USER@/aura/g" "$rule" > "/etc/polkit-1/rules.d/$(basename "$rule")"
 done
 chown -R aura:aura "$APP_DIR"
-for u in aura aura-kiosk aura-update; do
+for u in aura aura-kiosk aura-update aura-qbittorrent; do
   [[ -f "os/systemd/$u.service" ]] && cp -f "os/systemd/$u.service" "/etc/systemd/system/$u.service"
 done
 sed -i "s#@APP_DIR@#$APP_DIR#g; s#@DATA_DIR@#/var/lib/aura#g; s#@APP_USER@#aura#g; s#@KIOSK_USER@#tv#g" /etc/systemd/system/aura*.service
 systemctl daemon-reload
+systemctl restart aura-qbittorrent.service 2>/dev/null || true
 systemctl restart aura.service
 sleep 2
 systemctl restart aura-kiosk.service

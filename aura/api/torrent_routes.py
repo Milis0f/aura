@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request
 
 from ..config import SETTINGS
 from ..services import accounts, security
+from ..services import torrent_search
 from ..services.torrents import QBittorrent, TorrentError
 from . import guard
 from .state import AppState, state_of
@@ -32,6 +33,13 @@ async def torrents(st: AppState = Depends(state_of), session: accounts.Session =
         return await _client(st).list()
     except TorrentError as exc:
         raise HTTPException(exc.status, exc.message) from exc
+
+
+@router.get("/torrents/search")
+async def search_torrents(q: str = "", limit: int = 30, st: AppState = Depends(state_of),
+                         _: accounts.Session = Depends(guard.need_torrent)) -> dict[str, Any]:
+    """Metadata only: the answer feeds the table, the download still goes through /torrents/add."""
+    return await torrent_search.search(st.http, q, limit)
 
 
 @router.post("/torrents/add")

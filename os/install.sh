@@ -49,7 +49,7 @@ apt-get install -y -qq --no-install-recommends \
   cage seatd libgl1-mesa-dri mesa-va-drivers mesa-vulkan-drivers i965-va-driver intel-media-va-driver libva2 libva-drm2 vainfo \
   pipewire pipewire-pulse pipewire-audio wireplumber alsa-utils pulseaudio-utils \
   mpv ffmpeg nodejs fonts-noto-core fonts-noto-color-emoji fonts-liberation \
-  udisks2 ntfs-3g exfatprogs dosfstools \
+  udisks2 ntfs-3g exfatprogs dosfstools qbittorrent-nox \
   xdg-utils libu2f-udev libvulkan1 unzip plymouth plymouth-themes
 
 # Google Chrome (Widevine DRM for Netflix / Prime / Canal+; Debian's chromium has no Widevine)
@@ -161,6 +161,9 @@ if [[ ! -f "$ENV_FILE" ]]; then
 #AURA_QB_URL=http://127.0.0.1:8080
 #AURA_QB_USER=
 #AURA_QB_PASS=
+# Self-hosted search indexer (Jackett or Prowlarr). Without it Aura only searches the public catalogue.
+#AURA_INDEXER_URL=http://127.0.0.1:9117
+#AURA_INDEXER_KEY=
 # auto = Secure cookie only over HTTPS, so signing in from a phone over plain home-network HTTP keeps working
 AURA_SECURE_COOKIE=auto
 EOF
@@ -175,6 +178,33 @@ if systemctl cat nasdash.service >/dev/null 2>&1; then
   log "NAS Dashboard found: disabling nasdash.service, Aura takes over port $AURA_PORT"
   systemctl disable --now nasdash.service >/dev/null 2>&1 || true
 fi
+
+log "Downloads (qBittorrent)"
+DOWNLOAD_ROOT=$(grep -E '^(AURA_)?MEDIA_ROOT=' "$ENV_FILE" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d '"')
+DOWNLOAD_ROOT=${DOWNLOAD_ROOT:-$DATA_DIR/downloads}
+QB_PROFILE="$DATA_DIR/qbittorrent"
+QB_CONF="$QB_PROFILE/qBittorrent/config/qBittorrent.conf"
+mkdir -p "$QB_PROFILE/qBittorrent/config" "$DOWNLOAD_ROOT/Films" "$DOWNLOAD_ROOT/Series"
+if [[ ! -f "$QB_CONF" ]]; then
+  # LocalHostAuth=false is what lets Aura drive it without storing a password; the Web UI stays on localhost.
+  cat > "$QB_CONF" <<EOF
+[LegalNotice]
+Accepted=true
+
+[Preferences]
+WebUI\Port=8080
+WebUI\Address=127.0.0.1
+WebUI\LocalHostAuth=false
+Downloads\SavePath=$DOWNLOAD_ROOT/
+Downloads\TempPathEnabled=false
+
+[BitTorrent]
+Session\DefaultSavePath=$DOWNLOAD_ROOT/
+Session\Port=6881
+Session\QueueingSystemEnabled=false
+EOF
+fi
+chown -R "$APP_USER:$APP_USER" "$QB_PROFILE" "$DOWNLOAD_ROOT"
 
 log "Power / console / boot"
 # never sleep, never blank the console, quiet boot
@@ -198,6 +228,7 @@ log "systemd units"
 cp -f os/systemd/aura.service /etc/systemd/system/aura.service
 cp -f os/systemd/aura-kiosk.service /etc/systemd/system/aura-kiosk.service
 cp -f os/systemd/aura-update.service /etc/systemd/system/aura-update.service
+cp -f os/systemd/aura-qbittorrent.service /etc/systemd/system/aura-qbittorrent.service
 cp -f os/systemd/aura-update.timer /etc/systemd/system/aura-update.timer
 sed -i "s#@APP_DIR@#$APP_DIR#g; s#@DATA_DIR@#$DATA_DIR#g; s#@APP_USER@#$APP_USER#g; s#@KIOSK_USER@#$KIOSK_USER#g" /etc/systemd/system/aura*.service
 echo "d /run/aura 0775 $APP_USER $APP_USER -" > /etc/tmpfiles.d/aura.conf
@@ -205,7 +236,8 @@ systemd-tmpfiles --create /etc/tmpfiles.d/aura.conf
 # the kiosk session runs as user 'tv' on tty1; disable the getty there
 systemctl disable getty@tty1.service >/dev/null 2>&1 || true
 systemctl daemon-reload
-systemctl enable udisks2.service aura.service aura-kiosk.service aura-update.timer >/dev/null
+systemctl enable udisks2.service aura-qbittorrent.service aura.service aura-kiosk.service aura-update.timer >/dev/null
+systemctl restart aura-qbittorrent.service
 systemctl restart aura.service
 systemctl restart aura-kiosk.service || true
 

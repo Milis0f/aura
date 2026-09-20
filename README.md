@@ -29,9 +29,13 @@ It also keeps the NAS side of the machine: files, downloads, accounts. Dark, qui
 - **Live playback built for weak hardware**: every source of a channel probed in parallel, fastest live one wins;
   direct CDN fetch when CORS allows, local keep-alive proxy otherwise; raw MPEG-TS to mpv on low-core machines;
   YouTube live pages resolved with yt-dlp
+- **Search and downloads**: one search field over the indexers the box knows - the Internet Archive's public
+  catalogue out of the box, plus a self-hosted Jackett or Prowlarr when `AURA_INDEXER_URL` is set. Sortable
+  results, one click hands the `.torrent` or magnet to qBittorrent, which the installer puts on the machine and
+  configures (localhost only, no password to store). A finished download is scanned and joins the library
 - **NAS** (merged from NAS Dashboard v2): file manager (browse, search, upload, rename, move, delete, Range
-  streaming), downloads through qBittorrent, accounts with Argon2 passwords, TOTP two-factor, sessions, lockout
-  and audit trail, `aura-manage` in a terminal, import of existing NAS Dashboard accounts
+  streaming), accounts with Argon2 passwords, TOTP two-factor, sessions, lockout and audit trail,
+  `aura-manage` in a terminal, import of existing NAS Dashboard accounts
 - **Appliance OS layer** for Debian 13: `cage` Wayland kiosk, autologin, PipeWire HDMI, Wi-Fi and GPU firmware for
   common PCs and Intel Macs, udisks2, mDNS, quiet boot, nightly self-update, unattended preseed
 
@@ -80,6 +84,7 @@ aura/
     library          films, series, versions, resume points, links
     library_jobs     drive events, scans, posters, ffprobe durations, finished downloads
     accounts         Argon2 accounts, TOTP, sessions, lockout, audit, NAS Dashboard import
+    torrent_search   searches the public catalogue and the owner's indexer, merges and de-duplicates
     security, files, torrents
     m3u_parser, xtream, epg, tmdb, metadata, archive_films, catalog, probe, resolver, player (mpv IPC),
     kiosk (CDP), network (nmcli), system, hub, textutil, sports/{f1,ufc,teamsports,matcher}
@@ -89,7 +94,7 @@ aura/
   static/shared/     design tokens, Geist fonts, SVG icons
 os/
   install.sh         one-shot Debian 13 provisioning (idempotent, takes over NAS Dashboard)
-  systemd/           aura.service, aura-kiosk.service, nightly update timer
+  systemd/           aura.service, aura-kiosk.service, aura-qbittorrent.service, nightly update timer
   polkit/            NetworkManager and udisks2 rules for the service user
   scripts/           kiosk-session.sh (cage + Chrome), update.sh
   nginx-aura.conf    optional HTTPS reverse proxy for access from the Internet
@@ -111,6 +116,7 @@ accepted as they are.
 | `AURA_FILE_ROOTS` | | file manager roots, `Name:/path,Name:/path` |
 | `AURA_MEDIA_ROOT` | | media folder: file manager, library, download destination |
 | `AURA_QB_URL` / `_QB_USER` / `_QB_PASS` | `http://127.0.0.1:8080` | qBittorrent Web UI |
+| `AURA_INDEXER_URL` / `_INDEXER_KEY` | | self-hosted Jackett or Prowlarr, searched next to the public catalogue |
 | `AURA_JELLYFIN_URL` | | shows a Jellyfin link in the web app |
 | `AURA_SECURE_COOKIE` | `auto` | `Secure` session cookie only over HTTPS |
 | `AURA_SESSION_TTL` / `_IDLE_TTL` | `43200` / `86400` | session lifetime, idle timeout (seconds) |

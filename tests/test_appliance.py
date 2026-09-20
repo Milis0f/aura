@@ -78,3 +78,25 @@ def test_wikipedia_posters_are_resized_thumbnails():
     }
     assert metadata._wiki_image(summary).endswith("/500px-Affiche.jpg")
     assert metadata._wiki_image({"originalimage": {"source": "https://img.test/o.jpg"}}) == "https://img.test/o.jpg"
+
+
+def test_the_box_ships_its_own_download_client():
+    """Aura is the system, not an app dropped next to one: qBittorrent comes with it, preconfigured."""
+    script = _read("os/install.sh")
+    assert "qbittorrent-nox" in script
+    assert "aura-qbittorrent.service" in script and "qbittorrent-nox" in _read("os/scripts/update.sh")
+    unit = _read("os/systemd/aura-qbittorrent.service")
+    assert "--profile=@DATA_DIR@/qbittorrent" in unit and "User=@APP_USER@" in unit
+    # No password to store on either side, and the Web UI never leaves the machine.
+    assert "LocalHostAuth=false" in script
+    assert "WebUI" + chr(92) + "Address=127.0.0.1" in script
+    assert "AURA_INDEXER_URL" in script  # the optional self-hosted indexer is documented where the rest lives
+
+
+def test_search_is_reachable_and_guarded():
+    """The search feeds the downloads page, so it needs the same right as a download."""
+    from aura.api import torrent_routes
+
+    route = next(r for r in torrent_routes.router.routes if getattr(r, "path", "") == "/api/torrents/search")
+    assert "GET" in route.methods
+    assert "need_torrent" in _read("aura/api/torrent_routes.py").split("search_torrents")[1][:400]

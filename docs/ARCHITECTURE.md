@@ -21,7 +21,7 @@ aura.service (user aura, /etc/aura.env) ── uvicorn ── FastAPI :8000
 
 NetworkManager owns networking and udisks2 owns mounts: the backend calls `nmcli` and `udisksctl` directly, polkit
 rules in `os/polkit/` let the service user do it without sudo. Avahi publishes the mDNS name, PipeWire routes audio
-to HDMI, a nightly timer runs `update.sh`. qBittorrent, when the machine also serves as a NAS, keeps port 8080;
+to HDMI, a nightly timer runs `update.sh`. qBittorrent is part of the box and keeps port 8080 for its Web UI;
 Aura listens on 8000, the port NAS Dashboard used, so an existing reverse proxy keeps working.
 
 ## Access zones and accounts
@@ -84,6 +84,26 @@ plays `/api/library/stream/{id}` with Range requests. The web app can also play 
 comes back from mpv polling, the TV WebSocket or the web app and is saved every few seconds; a finished episode
 chains the next one unless `autoplay_next` is off. When qBittorrent finishes a download, the volume it landed on is
 rescanned so the film shows up without touching anything.
+
+## Search and downloads
+
+Aura ships no index. `services/torrent_search.py` asks the sources the box actually has: the Internet Archive's
+public catalogue (no key, every item exposes a `.torrent`, and no swarm counts - seeders stay null rather than
+invented), plus the owner's own Jackett or Prowlarr when `AURA_INDEXER_URL` is set. Both are queried at once;
+a source that fails is reported next to the results instead of emptying them. Rows are normalised through field
+aliases (snake_case, camelCase, Jackett's PascalCase), de-duplicated on magnet or link keeping the healthiest
+swarm, and sorted by seeders.
+
+The search runs on the box, never in the browser: no CORS to fight, the indexer key never reaches a page, and
+the same answer can feed the TV later. Links are filtered to `http(s)` and `magnet:?` before they are stored or
+handed to a client, so a crafted `javascript:` entry cannot travel through the UI. `GET /api/torrents/search`
+sits behind the same right as a download (`need_torrent`).
+
+The download itself is qBittorrent's job. The installer puts `qbittorrent-nox` on the machine and runs it as the
+`aura` user through `aura-qbittorrent.service`, with its profile under the data directory, its Web UI bound to
+127.0.0.1 and `LocalHostAuth=false`, so Aura drives it without a password to store on either side. Files land in
+`Films` or `Series` under the media root, and `library_jobs.torrent_loop` rescans that volume when a download
+finishes.
 
 ## Control flows
 

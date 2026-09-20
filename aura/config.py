@@ -46,6 +46,8 @@ class Settings:
     qb_user: str
     qb_pass: str = field(repr=False)
     jellyfin_url: str = ""
+    indexer_url: str = ""  # Jackett or Prowlarr, searched next to the public catalogue
+    indexer_key: str = ""
     media_root: str = ""
     file_roots: tuple[tuple[str, str], ...] = ()
     library_dirs: tuple[str, ...] = ()
@@ -116,6 +118,8 @@ def load_settings() -> Settings:
         qb_user=_env("AURA_QB_USER", "QB_USER"),
         qb_pass=_env("AURA_QB_PASS", "QB_PASS"),
         jellyfin_url=_env("AURA_JELLYFIN_URL", "JELLYFIN_URL"),
+        indexer_url=_env("AURA_INDEXER_URL").rstrip("/"),
+        indexer_key=_env("AURA_INDEXER_KEY"),
         media_root=_env("AURA_MEDIA_ROOT", "MEDIA_ROOT"),
         file_roots=parse_file_roots(_env("AURA_FILE_ROOTS", "FILE_ROOTS")),
         library_dirs=tuple(p for p in _env("AURA_LIBRARY_DIRS").split(os.pathsep) if p.strip()),

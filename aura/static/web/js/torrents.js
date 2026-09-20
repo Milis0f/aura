@@ -1,5 +1,6 @@
-/* Aura web — downloads through qBittorrent: add a link, follow progress, pause, resume, remove. */
-import { $, h, I, api, state, opt, events, toast, dialog, busy, emptyState, bytes, speed, eta } from "./core.js";
+/* Aura web — find a file on the indexers the box knows, then download it through qBittorrent.
+   The search runs on the box (/api/torrents/search): no CORS, and the indexer key never reaches the browser. */
+import { $, h, I, api, state, opt, events, toast, dialog, busy, debounce, emptyState, bytes, speed, eta } from "./core.js";
 
 const STATES = {
   downloading: ["Téléchargement", "dl"], forcedDL: ["Téléchargement", "dl"], metaDL: ["Lecture du lien", "dl"],
@@ -9,25 +10,50 @@ const STATES = {
   checkingUP: ["Vérification", ""], error: ["Erreur", ""], missingFiles: ["Fichiers manquants", ""], moving: ["Déplacement", ""],
 };
 
-let list, magnet, category;
+const COLUMNS = [
+  { key: "name", label: "Nom", dir: "asc" },
+  { key: "size", label: "Taille", dir: "desc", num: true },
+  { key: "seeders", label: "Sources", dir: "desc", num: true },
+];
+
+let list, magnet, category, query, results;
 let timer = null;
 let slow = false;
 let inFlight = false;
 let torrents = [];
 let lastError = "";
 
+let found = [];
+let searchStatus = "idle"; // idle | loading | done | error
+let searchError = "";
+let warnings = [];
+let sort = { key: "seeders", dir: "desc" };
+let queued = new Set();
+let searchRun = 0;
+let searchAbort = null;
+
 export function mount(section) {
-  magnet = h("input", { placeholder: "Lien magnet ou adresse .torrent", autocomplete: "off", spellcheck: "false", enterkeyhint: "go" });
+  query = h("input", { type: "search", placeholder: "Chercher : distribution Linux, jeu libre, jeu de données…", autocomplete: "off", spellcheck: "false", enterkeyhint: "search" });
+  query.addEventListener("input", debounce(() => runSearch(), 400));
   category = h("select", { "aria-label": "Destination" }, h("option", { value: "Films" }, "Films"), h("option", { value: "Series" }, "Séries"));
+  const searchButton = h("button", { class: "btn", type: "submit" }, I("search"), "Chercher");
+  results = h("div", { class: "results" });
+
+  magnet = h("input", { placeholder: "Lien magnet ou adresse .torrent", autocomplete: "off", spellcheck: "false", enterkeyhint: "go" });
   const submit = h("button", { class: "btn primary", type: "submit" }, I("download"), "Lancer");
   list = h("div", { class: "torrents" });
+
   section.append(
     h("div", { class: "view-head" }, h("div", { class: "grow" },
       h("h1", { class: "view-title" }, "Téléchargements"),
-      h("div", { class: "view-sub" }, "Les films terminés rejoignent la bibliothèque tout seuls."))),
-    h("form", { class: "add-row", onsubmit: (e) => { e.preventDefault(); busy(submit, add); } }, magnet, category, submit),
-    h("div", { style: "height:18px" }),
+      h("div", { class: "view-sub" }, "Cherche un fichier, il part dans qBittorrent et rejoint la bibliothèque tout seul."))),
+    h("form", { class: "add-row", onsubmit: (event) => { event.preventDefault(); runSearch(); } }, query, category, searchButton),
+    results,
+    h("h2", { class: "section-title" }, "Ou colle un lien"),
+    h("form", { class: "add-row", onsubmit: (event) => { event.preventDefault(); busy(submit, add); } }, magnet, submit),
+    h("h2", { class: "section-title" }, "En cours"),
     list);
+  renderSearch();
 }
 
 export function show() {
@@ -45,6 +71,118 @@ function restart(interval = Number(opt.refresh) || 3000, immediate = true) {
   timer = setInterval(tick, interval);
 }
 events.on("downloads-options", () => { slow = false; restart(); });
+
+/* ---------------------------------------------------------------- search */
+
+async function runSearch() {
+  const text = query.value.trim();
+  if (searchAbort) searchAbort.abort();
+  if (text.length < 2) {
+    found = [];
+    searchStatus = "idle";
+    renderSearch();
+    return;
+  }
+  searchAbort = new AbortController();
+  const run = ++searchRun;
+  searchStatus = "loading";
+  renderSearch();
+  try {
+    const answer = await api(`/api/torrents/search?q=${encodeURIComponent(text)}&limit=40`, { signal: searchAbort.signal });
+    if (run !== searchRun) return; // a later keystroke already won
+    found = answer.results || [];
+    warnings = answer.errors || [];
+    searchStatus = "done";
+  } catch (error) {
+    if (run !== searchRun || error.name === "AbortError") return;
+    searchError = error.message;
+    searchStatus = "error";
+  }
+  renderSearch();
+}
+
+/** Rows with no value sink to the bottom whichever way the column is sorted. */
+function sortFound() {
+  const factor = sort.dir === "asc" ? 1 : -1;
+  return [...found].sort((left, right) => {
+    const a = sort.key === "name" ? left.name.toLowerCase() : left[sort.key];
+    const b = sort.key === "name" ? right.name.toLowerCase() : right[sort.key];
+    if (a == null && b == null) return 0;
+    if (a == null) return 1;
+    if (b == null) return -1;
+    if (typeof a === "string") return a.localeCompare(b) * factor;
+    return (a - b) * factor;
+  });
+}
+
+function sortBy(column) {
+  sort = sort.key === column.key ? { key: column.key, dir: sort.dir === "asc" ? "desc" : "asc" } : { key: column.key, dir: column.dir };
+  renderSearch();
+}
+
+async function grab(row, button) {
+  await busy(button, async () => {
+    await api("/api/torrents/add", { method: "POST", form: { magnet: row.magnet || row.torrent_url, category: category.value } });
+    queued.add(row.id);
+    toast("Téléchargement lancé.", "ok", "download");
+    renderSearch();
+    tick();
+  });
+}
+
+function resultRow(row) {
+  const taken = queued.has(row.id);
+  const action = taken
+    ? h("span", { class: "res-none" }, "Ajouté")
+    : h("button", { class: "btn small", onclick: (event) => grab(row, event.currentTarget) }, I("download"), "Télécharger");
+  return h("tr", {},
+    h("td", {},
+      h("div", { class: "res-name", title: row.name }, row.name),
+      h("span", { class: "res-meta" },
+        row.indexer || "",
+        row.indexer && row.details_url ? " · " : "",
+        row.details_url ? h("a", { href: row.details_url, target: "_blank", rel: "noreferrer noopener" }, "Fiche") : null)),
+    h("td", { class: "num" }, row.size ? bytes(row.size) : "—"),
+    h("td", { class: `num ${row.seeders ? "res-seed" : "res-none"}` }, row.seeders == null ? "—" : String(row.seeders)),
+    h("td", { class: "num" }, action));
+}
+
+function renderSearch() {
+  if (!results) return;
+  if (searchStatus === "idle") {
+    results.replaceChildren(emptyState("search", "Cherche un fichier",
+      "Deux lettres suffisent. Aura interroge le catalogue public de l'Internet Archive, et ton indexeur auto-hébergé s'il est configuré (AURA_INDEXER_URL)."));
+    return;
+  }
+  if (searchStatus === "loading") {
+    results.replaceChildren(...Array.from({ length: 4 }, () => h("div", { class: "sk sk-row" })));
+    return;
+  }
+  if (searchStatus === "error") {
+    results.replaceChildren(emptyState("info", "Recherche impossible", searchError, {
+      actions: [h("button", { class: "btn", onclick: runSearch }, I("refresh"), "Réessayer")],
+    }));
+    return;
+  }
+  if (!found.length) {
+    results.replaceChildren(emptyState("search", "Aucun résultat",
+      "Essaie un autre mot. Le catalogue public couvre les films du domaine public, les logiciels libres et les jeux de données ; pour le reste, configure ton propre indexeur."));
+    return;
+  }
+
+  const head = h("tr", {}, ...COLUMNS.map((column) => h("th", {
+    class: `${column.num ? "num" : ""} ${sort.key === column.key ? "is-sorted" : ""}`.trim(),
+    "aria-sort": sort.key === column.key ? (sort.dir === "asc" ? "ascending" : "descending") : "none",
+  }, h("button", { type: "button", onclick: () => sortBy(column) }, column.label,
+    h("span", { class: "sort-caret" }, sort.key === column.key ? (sort.dir === "asc" ? "▲" : "▼") : "↕")))),
+  h("th", { class: "num" }, h("button", { type: "button", disabled: true }, "Action")));
+
+  results.replaceChildren(
+    h("table", { class: "res-table" }, h("thead", {}, head), h("tbody", {}, sortFound().map(resultRow))),
+    ...warnings.map((warning) => h("p", { class: "res-warn" }, `${warning.source} : ${warning.message}`)));
+}
+
+/* ---------------------------------------------------------------- downloads */
 
 async function tick() {
   if (!state.canTorrent || !state.csrf || document.hidden || inFlight) return;
@@ -77,12 +215,12 @@ async function tick() {
 function render() {
   if (lastError) {
     list.replaceChildren(emptyState("download", "qBittorrent ne répond pas", lastError, {
-      steps: ["Vérifie que qBittorrent tourne et que son interface Web est activée (sur le boîtier : systemctl status qbittorrent).", "Dans qBittorrent › Options › Web UI : coche « Contourner l'authentification pour les clients sur localhost », ou renseigne AURA_QB_USER et AURA_QB_PASS dans /etc/aura.env."],
+      steps: ["Vérifie que qBittorrent tourne et que son interface Web est activée (sur le boîtier : systemctl status aura-qbittorrent).", "Dans qBittorrent › Options › Web UI : coche « Contourner l'authentification pour les clients sur localhost », ou renseigne AURA_QB_USER et AURA_QB_PASS dans /etc/aura.env."],
     }));
     return;
   }
   if (!torrents.length) {
-    list.replaceChildren(emptyState("magnet", "Aucun téléchargement en cours", "Colle un lien ci-dessus : il part dans Films ou Séries et apparaît dans la bibliothèque une fois terminé."));
+    list.replaceChildren(emptyState("magnet", "Aucun téléchargement en cours", "Cherche un fichier ci-dessus, ou colle un lien : il part dans Films ou Séries et apparaît dans la bibliothèque une fois terminé."));
     return;
   }
   list.replaceChildren(...torrents.map(card));

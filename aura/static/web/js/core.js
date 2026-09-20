@@ -80,8 +80,8 @@ export const toForm = (fields) => {
   return form;
 };
 
-export async function api(path, { method = "GET", json, form, headers = {} } = {}) {
-  const init = { method, credentials: "same-origin", headers: { ...headers } };
+export async function api(path, { method = "GET", json, form, headers = {}, signal } = {}) {
+  const init = { method, credentials: "same-origin", headers: { ...headers }, signal };
   if (method !== "GET" && state.csrf) init.headers["X-CSRF-Token"] = state.csrf;
   if (json !== undefined) {
     init.headers["Content-Type"] = "application/json";
@@ -90,7 +90,10 @@ export async function api(path, { method = "GET", json, form, headers = {} } = {
     init.body = form instanceof FormData ? form : toForm(form);
   }
   let response;
-  try { response = await fetch(path, init); } catch { throw new ApiError("Le boîtier ne répond pas.", 0); }
+  try { response = await fetch(path, init); } catch (error) {
+    if (error && error.name === "AbortError") throw error;  // a search the user replaced, not a failure
+    throw new ApiError("Le boîtier ne répond pas.", 0);
+  }
   const isJson = (response.headers.get("content-type") || "").includes("json");
   const data = isJson ? await response.json().catch(() => null) : null;
   if (response.status === 401 && state.csrf) events.emit("unauthorized");
