@@ -9,17 +9,38 @@ let scrim = null;
 let lastFocus = null;
 let target = { mode: "server", volume: "", category: "Films" };
 
+const FOCUSABLE = "button, a[href], input, select, textarea, [tabindex]:not([tabindex='-1'])";
+
+/** aria-modal alone does not stop a screen reader walking the page behind; inert does. */
+function background(off) {
+  const app = document.querySelector(".app");
+  if (!app) return;
+  if (off) app.setAttribute("inert", "");
+  else app.removeAttribute("inert");
+  if (!("inert" in HTMLElement.prototype)) app.toggleAttribute("aria-hidden", off);
+}
+
 export function closeCard() {
   if (!sheet) return;
   sheet.remove();
   scrim.remove();
   sheet = scrim = null;
+  background(false);
   document.removeEventListener("keydown", onKey);
   if (lastFocus && lastFocus.isConnected) lastFocus.focus();
 }
 
 function onKey(event) {
-  if (event.key === "Escape") { event.stopPropagation(); closeCard(); }
+  if (event.key === "Escape") { event.stopPropagation(); closeCard(); return; }
+  if (event.key !== "Tab" || !sheet) return;
+  // Keep Tab inside the sheet: behind it the page is inert, so escaping would strand the focus ring.
+  const stops = [...sheet.querySelectorAll(FOCUSABLE)].filter((el) => !el.disabled && el.offsetParent !== null);
+  if (!stops.length) return;
+  const edge = event.shiftKey ? stops[0] : stops[stops.length - 1];
+  if (document.activeElement === edge || !sheet.contains(document.activeElement)) {
+    event.preventDefault();
+    (event.shiftKey ? stops[stops.length - 1] : stops[0]).focus();
+  }
 }
 
 export function openCard(card, { onStarted } = {}) {
@@ -32,6 +53,7 @@ export function openCard(card, { onStarted } = {}) {
   sheet = h("aside", { class: "sheet", role: "dialog", "aria-modal": "true", "aria-label": card.title }, body);
   scrim = h("div", { class: "sheet-scrim", onclick: closeCard });
   document.body.append(scrim, sheet);
+  background(true);
   document.addEventListener("keydown", onKey);
   render();
   const close = sheet.querySelector(".dt-close");
@@ -82,8 +104,9 @@ export function openCard(card, { onStarted } = {}) {
             release.details_url
               ? h("a", { class: "res-link", href: release.details_url, target: "_blank", rel: "noreferrer noopener", onclick: (e) => e.stopPropagation() }, "Voir sur la source")
               : null),
+          // A radio, and it has to look like one: a switch would read as "several at once".
           h("input", {
-            type: "radio", name: "aura-release", class: "sw", checked: on,
+            type: "radio", name: "aura-release", class: "pick", checked: on,
             "aria-label": `Choisir ${release.name}`, onchange: () => pick(release),
           }));
       }));

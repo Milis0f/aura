@@ -57,7 +57,8 @@ export function resultGrid({ onSearch, onStarted }) {
     }, I(sort.dir === "asc" ? "chevron-up" : "chevron-down"));
     const count = `${view.cards.length} ${view.cards.length > 1 ? "titres" : "titre"}`;
     return h("div", { class: "res-bar" },
-      h("span", { class: "res-count" }, count),
+      // Announced on its own: a screen reader otherwise gets no sign that the results changed.
+      h("span", { class: "res-count", role: "status", "aria-live": "polite" }, count),
       h("span", { class: "spacer" }),
       view.truncated ? h("button", { class: "btn ghost", onclick: (event) => busy(event.currentTarget, () => onSearch(ALL)) }, I("list"), "Voir tout") : null,
       select, flip);
@@ -70,9 +71,13 @@ export function resultGrid({ onSearch, onStarted }) {
         entry.rating ? h("span", { class: "tag hi" }, I("star-fill"), String(entry.rating).replace(".", ",").slice(0, 3)) : null,
         entry.media === "tv" ? h("span", { class: "tag" }, "Série") : null,
         entry.releases.length > 1 ? h("span", { class: "tag" }, `${entry.releases.length} versions`) : null),
+      // Every card repeats the same two words, so the accessible name has to carry the title - which
+      // also lets the label drop on narrow cards without the buttons becoming anonymous.
       h("div", { class: "pc-actions" },
-        h("button", { class: "btn small", onclick: () => openCard(entry, { onStarted }) }, I("info"), "Fiche"),
-        h("button", { class: "btn small primary", onclick: (event) => busy(event.currentTarget, () => grab(entry)) }, I("download"), "Télécharger")));
+        h("button", { class: "btn small", title: "Fiche", "aria-label": `Fiche de ${entry.title}`, onclick: () => openCard(entry, { onStarted }) },
+          I("info"), h("span", { class: "lbl" }, "Fiche")),
+        h("button", { class: "btn small primary", title: "Télécharger", "aria-label": `Télécharger ${entry.title}`, onclick: (event) => busy(event.currentTarget, () => grab(entry)) },
+          I("download"), h("span", { class: "lbl" }, "Télécharger"))));
     const bits = [entry.year, entry.size ? bytes(entry.size) : "", entry.seeders == null ? "" : `${entry.seeders} sources`];
     return stagger(h("article", { class: "poster-card" }, art,
       h("div", { class: "pc-meta" },
