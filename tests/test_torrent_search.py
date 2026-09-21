@@ -159,3 +159,15 @@ def test_the_box_only_remembers_what_it_returned():
     assert torrent_search.recall("keep")[0] == "https://archive.test/s.torrent"
     assert torrent_search.recall("drop") is None
     assert torrent_search.recall("never-seen") is None
+
+
+def test_build_magnet_from_hash_only():
+    row = {"Title": "X", "Hash": "a" * 40, "MagnetUri": "", "DownloadUrl": ""}
+    out = torrent_search.normalise(row)
+    assert out is not None
+    assert out["magnet"].startswith("magnet:?xt=urn:btih:")
+    assert len(out["magnet"].split("urn:btih:")[1].split("&")[0]) == 40
+
+
+def test_build_magnet_invalid_hash():
+    assert torrent_search._build_magnet("nothex", "X") == ""

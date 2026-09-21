@@ -15,7 +15,7 @@ import hashlib
 import logging
 import re
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 import httpx
 
@@ -46,6 +46,7 @@ ALIASES: dict[str, tuple[str, ...]] = {
     "published": ("publishedAt", "published_at", "publishDate", "PublishDate", "pubDate", "date"),
     "torrent": ("torrentUrl", "torrent_url", "downloadUrl", "download_url", "Link", "link"),
     "magnet": ("magnetUrl", "magnet_url", "magnetUri", "MagnetUri", "magnet"),
+    "hash": ("infoHash", "info_hash", "InfoHash", "hash", "Hash", "btih"),
     "details": ("detailsUrl", "details_url", "infoUrl", "info_url", "Details", "comments"),
     "indexer": ("indexer", "Indexer", "tracker", "Tracker", "site"),
 }
@@ -100,6 +101,13 @@ def magnet_url(value: Any) -> str:
     return text if text.lower().startswith("magnet:?") else ""
 
 
+def _build_magnet(hash_hex: str, title: str) -> str:
+    h = (hash_hex or "").strip()
+    if not re.fullmatch(r"[0-9a-fA-F]{40}", h):
+        return ""
+    return f"magnet:?xt=urn:btih:{h.lower()}&dn={quote(title)}"
+
+
 def _digest(*parts: str) -> str:
     return hashlib.sha1("|".join(parts).encode()).hexdigest()[:12]
 
@@ -112,6 +120,10 @@ def normalise(raw: Any, indexer_fallback: str = "") -> dict[str, Any] | None:
         return None  # a row without a name is noise, not a result
     torrent = http_url(_pick(raw, ALIASES["torrent"]))
     magnet = magnet_url(_pick(raw, ALIASES["magnet"]))
+    if not magnet:
+        # Some indexers publish only the info hash. It cannot rebuild a .torrent, but it is exactly what
+        # a magnet is made of, so a row that used to be dropped becomes usable.
+        magnet = _build_magnet(_text(_pick(raw, ALIASES["hash"])) or _text(_pick(raw, ALIASES["id"])), name)
     if not torrent and not magnet:
         return None  # nothing to hand to qBittorrent
     size = _number(_pick(raw, ALIASES["size"]))
