@@ -30,9 +30,11 @@ It also keeps the NAS side of the machine: files, downloads, accounts. Dark, qui
   direct CDN fetch when CORS allows, local keep-alive proxy otherwise; raw MPEG-TS to mpv on low-core machines;
   YouTube live pages resolved with yt-dlp
 - **Search and downloads**: one search field over the indexers the box knows - the Internet Archive's public
-  catalogue out of the box, plus a self-hosted Jackett or Prowlarr when `AURA_INDEXER_URL` is set. Sortable
-  results, one click hands the `.torrent` or magnet to qBittorrent, which the installer puts on the machine and
-  configures (localhost only, no password to store). A finished download is scanned and joins the library
+  catalogue out of the box, plus a self-hosted Jackett or Prowlarr when `AURA_INDEXER_URL` is set. Results come
+  back as a sortable grid of titles (poster and summary from TMDB when a key is set, initials on a generated
+  gradient otherwise); a sheet shows every release of a title and where to put it - a volume on the box, or this
+  machine (`.torrent` file or magnet link). The box hands the link to qBittorrent, which the installer puts on
+  the machine and configures (localhost only, no password to store). A finished download joins the library
 - **NAS** (merged from NAS Dashboard v2): file manager (browse, search, upload, rename, move, delete, Range
   streaming), accounts with Argon2 passwords, TOTP two-factor, sessions, lockout and audit trail,
   `aura-manage` in a terminal, import of existing NAS Dashboard accounts
@@ -85,12 +87,14 @@ aura/
     library_jobs     drive events, scans, posters, ffprobe durations, finished downloads
     accounts         Argon2 accounts, TOTP, sessions, lockout, audit, NAS Dashboard import
     torrent_search   searches the public catalogue and the owner's indexer, merges and de-duplicates
+    torrent_cards    groups releases by title and fills the cards from TMDB (fallback: initials on a gradient)
     security, files, torrents
     m3u_parser, xtream, epg, tmdb, metadata, archive_films, catalog, probe, resolver, player (mpv IPC),
     kiosk (CDP), network (nmcli), system, hub, textutil, sports/{f1,ufc,teamsports,matcher}
   static/tv/         TV kiosk UI (vanilla JS, spatial navigation, hls.js/mpegts.js) + tv-library.js
   static/remote/     phone remote and setup (PWA)
   static/web/        web app (ES modules): library, drives, files, downloads, system, accounts
+                     downloads splits into torrents (page), torrent-grid, torrent-sheet, torrent-target
   static/shared/     design tokens, Geist fonts, SVG icons
 os/
   install.sh         one-shot Debian 13 provisioning (idempotent, takes over NAS Dashboard)

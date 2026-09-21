@@ -154,9 +154,22 @@ propriétaire** (12 caractères minimum, une phrase courte marche très bien). E
 - **Téléchargements** : qBittorrent est installé et configuré par le script, rien à faire. Son interface Web
   n'écoute que sur la machine et Aura lui parle sans mot de passe. Dans l'appli web, onglet *Téléchargements* :
   tape ce que tu cherches, les résultats arrivent du catalogue public de l'Internet Archive (films du domaine
-  public, logiciels libres, jeux de données), tu choisis *Films* ou *Séries*, et un clic sur *Télécharger*
-  l'envoie à qBittorrent. Une fois terminé, le fichier est analysé et rejoint la bibliothèque tout seul.
-  Tu peux aussi coller un lien magnet ou une adresse `.torrent`.
+  public, logiciels libres, jeux de données) sous forme de vignettes, une par titre. Tu peux les trier par
+  nombre de sources, taille, année ou titre, et *Voir tout* élargit la recherche quand il y a plus de résultats
+  que d'affiches à l'écran.
+- **Choisir la version et la destination** : *Fiche* ouvre le panneau de droite. Il liste toutes les versions du
+  titre (taille, sources, date, nom du fichier) et te laisse choisir où ça va :
+  - **Serveur** : le disque du boîtier, dans *Films* ou *Séries*. C'est qBittorrent qui télécharge, le fichier
+    est analysé à la fin et rejoint la bibliothèque tout seul.
+  - **Disque local** : *Télécharger le .torrent* enregistre le fichier sur la machine où tu es (c'est le boîtier
+    qui va le chercher, ton navigateur ne peut pas le faire lui-même), et *Ouvrir dans mon client* passe le lien
+    magnet au logiciel BitTorrent installé sur cette machine.
+
+  Le mode choisi et la destination exacte sont toujours écrits en clair avant de lancer. Le bouton *Télécharger*
+  directement sur une vignette prend la meilleure version et le dossier par défaut. Tu peux aussi coller un lien
+  magnet ou une adresse `.torrent` plus bas dans la page.
+- **Affiches** : elles viennent de TMDB. Sans clé TMDB (appli web › Système › Réglages), les vignettes affichent
+  les initiales du titre sur un dégradé — tout fonctionne pareil, c'est juste moins joli.
 - **Ton propre indexeur** (facultatif) : si tu héberges Jackett ou Prowlarr, ajoute `AURA_INDEXER_URL` et
   `AURA_INDEXER_KEY` dans `/etc/aura.env`, puis `sudo systemctl restart aura`. Ses résultats se mélangent à
   ceux du catalogue public, triés par nombre de sources.

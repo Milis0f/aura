@@ -92,7 +92,16 @@ public catalogue (no key, every item exposes a `.torrent`, and no swarm counts -
 invented), plus the owner's own Jackett or Prowlarr when `AURA_INDEXER_URL` is set. Both are queried at once;
 a source that fails is reported next to the results instead of emptying them. Rows are normalised through field
 aliases (snake_case, camelCase, Jackett's PascalCase), de-duplicated on magnet or link keeping the healthiest
-swarm, and sorted by seeders.
+swarm, and sorted by seeders. De-duplication then runs a second pass on the normalised title, its year and a
+32 MiB size bucket, so one release announced by two trackers with different punctuation collapses into a single
+result while two cuts of the same film stay apart.
+
+`services/torrent_cards.py` turns that flat list into what the page shows: one card per title, its releases
+folded underneath, so the grid lists titles and the sheet lets the owner choose a release. Cards are filled from
+TMDB with the key and the cache the library already uses. TMDB only, on purpose - the keyless fallbacks (iTunes,
+Wikipedia, TVMaze) are sized for the handful of titles a scan resolves over hours, and asking them for two dozen
+cards on every keystroke earns the box an HTTP 429 that then breaks the library too. With no key, or for a title
+the catalogue does not know, the card still renders: initials on a gradient seeded by the title.
 
 The search runs on the box, never in the browser: no CORS to fight, the indexer key never reaches a page, and
 the same answer can feed the TV later. Links are filtered to `http(s)` and `magnet:?` before they are stored or
@@ -103,7 +112,10 @@ The download itself is qBittorrent's job. The installer puts `qbittorrent-nox` o
 `aura` user through `aura-qbittorrent.service`, with its profile under the data directory, its Web UI bound to
 127.0.0.1 and `LocalHostAuth=false`, so Aura drives it without a password to store on either side. Files land in
 `Films` or `Series` under the media root, and `library_jobs.torrent_loop` rescans that volume when a download
-finishes.
+finishes. `POST /api/torrents/add` takes a volume **id**, never a path: the id is resolved against the volumes the
+box has mounted, so nothing a caller sends can become a directory. `GET /api/torrents/file/{id}` relays a `.torrent`
+to a browser that cannot fetch it itself (cross-origin), and only for ids a recent search returned - no
+caller-supplied URL ever reaches the network.
 
 ## Control flows
 

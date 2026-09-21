@@ -128,3 +128,34 @@ def test_duplicates_keep_the_healthiest_copy():
     ]
     (kept,) = torrent_search.dedupe(rows)
     assert kept["seeders"] == 90
+
+
+def test_the_same_release_from_two_indexers_collapses_on_its_title():
+    """Two trackers, two spellings, one release: the healthiest copy wins and the other disappears."""
+    rows = [
+        {"name": "Big.Buck.Bunny.2008.1080p.WEB.x264-GROUP", "size": 2_000_000_000,
+         "magnet": "magnet:?xt=urn:btih:aaa", "torrent_url": "", "seeders": 3},
+        {"name": "Big Buck Bunny (2008) 1080p WEB x264-GROUP", "size": 2_000_100_000,
+         "magnet": "magnet:?xt=urn:btih:bbb", "torrent_url": "", "seeders": 120},
+    ]
+    (kept,) = torrent_search.dedupe(rows)
+    assert kept["seeders"] == 120
+
+
+def test_two_qualities_of_one_film_stay_two_results():
+    rows = [
+        {"name": "Big.Buck.Bunny.2008.720p", "size": 800_000_000, "magnet": "magnet:?xt=urn:btih:aaa", "torrent_url": "", "seeders": 9},
+        {"name": "Big.Buck.Bunny.2008.2160p", "size": 9_000_000_000, "magnet": "magnet:?xt=urn:btih:bbb", "torrent_url": "", "seeders": 9},
+    ]
+    assert len(torrent_search.dedupe(rows)) == 2
+
+
+def test_the_box_only_remembers_what_it_returned():
+    torrent_search._RECENT.clear()
+    torrent_search.remember([
+        {"id": "keep", "name": "Sintel", "torrent_url": "https://archive.test/s.torrent"},
+        {"id": "drop", "name": "Magnet only", "torrent_url": ""},
+    ])
+    assert torrent_search.recall("keep")[0] == "https://archive.test/s.torrent"
+    assert torrent_search.recall("drop") is None
+    assert torrent_search.recall("never-seen") is None

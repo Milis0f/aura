@@ -220,3 +220,43 @@ async def test_unreachable_qbittorrent_names_the_address():
     finally:
         await client.aclose()
     assert "http://127.0.0.1:8080" in raised.value.message
+
+
+def test_download_destination_is_chosen_by_volume_id(local, media):
+    """The browser names a disk, never a path: nothing a caller sends becomes a directory on the box."""
+    csrf = _owner(local)
+    sent: list[dict[str, str]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/v2/torrents/add":
+            sent.append(dict(httpx.QueryParams(request.content.decode())))
+        return httpx.Response(200, text="Ok.")
+
+    st = local.app.state.aura
+    previous, st.qbit = st.qbit, QBittorrent("http://qb.test", transport=httpx.MockTransport(handler))
+    if previous:
+        local.portal.call(previous.aclose)
+
+    targets = local.get("/api/torrents/targets").json()["targets"]
+    assert targets, "the box should offer at least the drive the library watches"
+    assert all({"id", "label", "path"} <= set(target) for target in targets)
+
+    disk = next(target for target in targets if str(media) in target["path"])
+    link = "magnet:?xt=urn:btih:" + "b" * 40
+    assert local.post("/api/torrents/add", data={"magnet": link, "category": "Series", "volume": disk["id"]}, headers=csrf).json()["ok"]
+    assert sent[-1]["savepath"].endswith("Series")
+    assert str(media) in sent[-1]["savepath"]
+
+    refused = local.post("/api/torrents/add", data={"magnet": link, "volume": "dir:nothing-here"}, headers=csrf)
+    assert refused.status_code == 400
+    assert "disque" in refused.json()["detail"].lower()
+
+
+def test_torrent_file_only_relays_links_the_box_itself_produced(local):
+    """The relay exists for cross-origin .torrent files; it must not become a way to probe the LAN."""
+    _owner(local)
+    from aura.services import torrent_search
+
+    assert local.get("/api/torrents/file/never-searched-for-this").status_code == 404
+    torrent_search.remember([{"id": "ia:sintel", "name": "Sintel/2010", "torrent_url": "https://archive.test/s.torrent"}])
+    assert torrent_search.recall("ia:sintel") == ("https://archive.test/s.torrent", "Sintel/2010")

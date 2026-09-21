@@ -13,20 +13,28 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
+import re
 from typing import Any
 from urllib.parse import urlparse
 
 import httpx
 
 from ..config import SETTINGS
+from . import tmdb, torrent_cards
 
 log = logging.getLogger(__name__)
+
+# Insertion-ordered: the oldest search falls out first once the box has seen enough of them.
+_RECENT: dict[str, tuple[str, str]] = {}
 
 ARCHIVE_SEARCH = "https://archive.org/advancedsearch.php"
 ARCHIVE_FIELDS = ("identifier", "title", "item_size", "publicdate", "downloads")
 MIN_QUERY = 2
 TIMEOUT_SECONDS = 12.0
 DEFAULT_LIMIT = 30
+MAX_LIMIT = 200  # what the "voir tout" button asks for
+RECENT_MAX = 600  # ids the box still accepts on /torrents/file
+_TRAILING_GROUP = re.compile(r"\s*-\s*[A-Za-z0-9]+\s*$")
 
 # Indexers disagree on case and spelling; read every field through its known aliases.
 ALIASES: dict[str, tuple[str, ...]] = {
@@ -198,21 +206,64 @@ def _rank(result: dict[str, Any]) -> tuple[int, int]:
     return (result.get("seeders") or -1, result.get("size") or 0)
 
 
+def _identity(result: dict[str, Any]) -> str:
+    """Same release, two indexers: the names differ in punctuation but the title and size do not.
+
+    Size is bucketed to 32 MiB so that a re-seed announced as 4 294 967 296 or 4 294 000 000 bytes still
+    matches, while a 720p and a 2160p cut of the same film stay two different releases.
+    """
+    name = result.get("name", "")
+    title, year = tmdb.clean_title(name)
+    # clean_title only drops a trailing '-GROUP' from dotted release names; the spaced spelling of the
+    # same release keeps it, and two spellings must not become two results.
+    title = _TRAILING_GROUP.sub("", title)
+    key = torrent_cards.slug(title) or torrent_cards.slug(name)
+    if not key:
+        return (result["magnet"] or result["torrent_url"] or name).lower()
+    size = result.get("size") or 0
+    return f"{key}|{year}|{size // (32 * 1024 * 1024)}"
+
+
 def dedupe(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """The same release comes back from several indexers: keep the copy with the healthiest swarm."""
     best: dict[str, dict[str, Any]] = {}
     for result in results:
-        key = (result["magnet"] or result["torrent_url"] or f"{result['name']}|{result['size']}").lower()
+        link = (result["magnet"] or result["torrent_url"]).lower()
+        key = link or _identity(result)
         current = best.get(key)
         if current is None or _rank(result) > _rank(current):
             best[key] = result
-    return list(best.values())
+    deduped: dict[str, dict[str, Any]] = {}
+    for result in best.values():
+        key = _identity(result)
+        current = deduped.get(key)
+        if current is None or _rank(result) > _rank(current):
+            deduped[key] = result
+    return list(deduped.values())
+
+
+def remember(results: list[dict[str, Any]]) -> None:
+    """Ids the box may fetch a .torrent for later.
+
+    The browser cannot download a .torrent straight from the indexer (cross-origin, and the key would
+    have to travel), so it asks Aura by id. Only links this box produced are accepted: no caller-supplied
+    URL ever reaches the network.
+    """
+    for result in results:
+        if result.get("torrent_url"):
+            _RECENT[result["id"]] = (result["torrent_url"], result.get("name", ""))
+    while len(_RECENT) > RECENT_MAX:
+        _RECENT.pop(next(iter(_RECENT)))
+
+
+def recall(result_id: str) -> tuple[str, str] | None:
+    return _RECENT.get(result_id)
 
 
 async def search(http: httpx.AsyncClient, query: str, limit: int = DEFAULT_LIMIT) -> dict[str, Any]:
     """Every configured source at once. A source that fails is reported, it never empties the answer."""
     query = query.strip()
-    limit = max(1, min(limit, 100))
+    limit = max(1, min(limit, MAX_LIMIT))
     if len(query) < MIN_QUERY:
         return {"results": [], "sources": sources(), "errors": []}
 
@@ -231,7 +282,9 @@ async def search(http: httpx.AsyncClient, query: str, limit: int = DEFAULT_LIMIT
 
     results = dedupe(results)
     results.sort(key=_rank, reverse=True)
-    return {"results": results[:limit], "sources": configured, "errors": errors}
+    results = results[:limit]
+    remember(results)
+    return {"results": results, "sources": configured, "errors": errors}
 
 
 def _explain(error: BaseException) -> str:
