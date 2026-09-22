@@ -192,6 +192,7 @@ CREATE TABLE IF NOT EXISTS media_files (
   added INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_mf_item ON media_files(item_id, season, episode);
+CREATE INDEX IF NOT EXISTS idx_mf_item_added ON media_files(item_id, added DESC);
 CREATE INDEX IF NOT EXISTS idx_mf_drive ON media_files(drive_id);
 CREATE TABLE IF NOT EXISTS media_progress (
   file_id TEXT PRIMARY KEY,
@@ -250,16 +251,37 @@ def close_thread_connection() -> None:
         _local.con = None
 
 
-def _ensure_column(con: sqlite3.Connection, table: str, column: str, decl: str) -> None:
-    """Add a column to an existing database created by an older version."""
-    if column not in {r["name"] for r in con.execute(f"PRAGMA table_info({table})")}:
-        con.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
+LATE_INDEXES = """
+CREATE INDEX IF NOT EXISTS idx_mi_recent ON media_items(kind, last_added DESC);
+CREATE INDEX IF NOT EXISTS idx_mi_rating ON media_items(rating DESC, last_added DESC);
+CREATE INDEX IF NOT EXISTS idx_mi_year ON media_items(year DESC, title_fold);
+"""
+
+
+def _ensure_column(con: sqlite3.Connection, table: str, column: str, decl: str) -> bool:
+    """Add a column to an existing database created by an older version. True when it was just added."""
+    if column in {r["name"] for r in con.execute(f"PRAGMA table_info({table})")}:
+        return False
+    con.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
+    return True
+
+
+# Sorting a library page used to need MAX(media_files.added) per row, which forced SQLite to join and
+# group every title in the collection before it could return sixty. The value is stored on the title
+# instead, maintained wherever files are written, and backfilled once here.
+BACKFILL_LAST_ADDED = """
+UPDATE media_items SET last_added = COALESCE(
+  (SELECT MAX(f.added) FROM media_files f WHERE f.item_id = media_items.id), added)
+"""
 
 
 def init_db() -> None:
     con = connect()
     con.executescript(SCHEMA)
     _ensure_column(con, "channels", "name_fold", "TEXT NOT NULL DEFAULT ''")
+    if _ensure_column(con, "media_items", "last_added", "INTEGER NOT NULL DEFAULT 0"):
+        con.execute(BACKFILL_LAST_ADDED)
+    con.executescript(LATE_INDEXES)
 
 
 @contextmanager

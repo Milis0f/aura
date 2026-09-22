@@ -10,3 +10,6 @@ __pycache__/
 data/
 # local Claude Code state and worktrees
 .claude/
+
+# benchmark scratch database
+tools/bench-data/

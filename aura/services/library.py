@@ -26,11 +26,21 @@ RESUME_MIN_SECONDS = 30
 QUALITY_RANK = {"4K": 4, "1080p": 3, "720p": 2, "SD": 1, "": 0}
 LANG_ORDER = ("MULTI", "VF", "VOSTFR")
 SORTS = {
-    "added": "last_added DESC, i.title_fold",
+    "added": "i.last_added DESC, i.title_fold",
     "title": "i.title_fold, i.year",
     "year": "i.year DESC, i.title_fold",
-    "rating": "i.rating DESC, last_added DESC",
+    "rating": "i.rating DESC, i.last_added DESC",
 }
+
+# Availability as EXISTS rather than SUM(...) > 0: it stops at the first file on a mounted drive, where
+# the aggregate had to read every file of every title before it could filter anything out.
+_ONLINE = ("(i.kind = 'link' OR EXISTS (SELECT 1 FROM media_files f JOIN drives d ON d.id = f.drive_id "
+           "WHERE f.item_id = i.id AND d.available = 1))")
+_ANY_FILE = "(i.kind = 'link' OR EXISTS (SELECT 1 FROM media_files f WHERE f.item_id = i.id))"
+
+
+def _present(online_only: bool) -> str:
+    return _ONLINE if online_only else _ANY_FILE
 
 _ITEM_SELECT = """
 SELECT i.id, i.kind, i.title, i.year, i.poster, i.backdrop, i.overview, i.genres, i.rating, i.runtime, i.url,
@@ -124,14 +134,29 @@ def finish_scan(drive_id: str) -> dict[str, int]:
     return {"films": films, "episodes": episodes}
 
 
+def _refresh_last_added(con: Any, item_ids: Sequence[str]) -> None:
+    """Recompute the stored sort key for titles whose files just changed."""
+    for chunk in db.chunked(list(item_ids)):
+        marks = ",".join("?" * len(chunk))
+        con.execute(
+            "UPDATE media_items SET last_added = COALESCE("
+            "  (SELECT MAX(f.added) FROM media_files f WHERE f.item_id = media_items.id), added) "
+            f"WHERE id IN ({marks})",
+            tuple(chunk),
+        )
+
+
 def forget_drive(drive_id: str) -> bool:
     """Drop an unplugged drive and what the library knew about it. Resume points stay."""
     d = get_drive(drive_id)
     if not d or d["available"]:
         return False
     with db.transaction() as con:
+        touched = [r["item_id"] for r in
+                   con.execute("SELECT DISTINCT item_id FROM media_files WHERE drive_id = ?", (drive_id,))]
         con.execute("DELETE FROM media_files WHERE drive_id = ?", (drive_id,))
         con.execute("DELETE FROM drives WHERE id = ?", (drive_id,))
+        _refresh_last_added(con, touched)
         con.execute("DELETE FROM media_items WHERE kind <> 'link' AND NOT EXISTS (SELECT 1 FROM media_files f WHERE f.item_id = media_items.id)")
     return True
 
@@ -172,6 +197,12 @@ def apply_scan(drive_id: str, changed: Sequence[tuple[FoundLike, mediaparse.Pars
                  parsed.season, parsed.episode, parsed.episode_title, parsed.quality, ",".join(parsed.langs), art, now),
             )
         con.execute("DELETE FROM media_items WHERE kind <> 'link' AND NOT EXISTS (SELECT 1 FROM media_files f WHERE f.item_id = media_items.id)")
+        con.execute(
+            "UPDATE media_items SET last_added = COALESCE("
+            "  (SELECT MAX(f.added) FROM media_files f WHERE f.item_id = media_items.id), added) "
+            "WHERE id IN (SELECT DISTINCT item_id FROM media_files WHERE drive_id = ?)",
+            (drive_id,),
+        )
     return new_items
 
 
@@ -250,6 +281,13 @@ def _latest_progress(item_ids: Sequence[str]) -> dict[str, dict[str, Any]]:
 
 def items(kind: str | None = None, q: str | None = None, drive_id: str | None = None, sort: str = "added",
           limit: int = 60, offset: int = 0, online_only: bool = True) -> tuple[list[dict[str, Any]], int]:
+    """Two steps on purpose.
+
+    Finding which titles belong on the page needs no aggregation at all - it is a filter and a sort over
+    media_items, both indexed. Only once the page is known (sixty rows at most) is the expensive part
+    run: the DISTINCT roll-ups of qualities, languages, drives and seasons. The old single query paid
+    that cost for the whole collection, twice, on every request.
+    """
     where: list[str] = []
     params: list[Any] = []
     if kind in (FILM, SERIES, LINK):
@@ -262,51 +300,76 @@ def items(kind: str | None = None, q: str | None = None, drive_id: str | None = 
     if drive_id:
         where.append("EXISTS (SELECT 1 FROM media_files f2 WHERE f2.item_id = i.id AND f2.drive_id = ?)")
         params.append(drive_id)
-    having = "(i.kind = 'link' OR files_online > 0)" if online_only else "(i.kind = 'link' OR files > 0)"
-    base = _ITEM_SELECT + (" WHERE " + " AND ".join(where) if where else "") + " GROUP BY i.id HAVING " + having
-    total = (db.query_one(f"SELECT COUNT(*) AS n FROM ({base})", tuple(params)) or {"n": 0})["n"]
-    rows = db.query(
-        f"{base} ORDER BY {SORTS.get(sort, SORTS['added'])} LIMIT ? OFFSET ?",
+    where.append(_present(online_only))
+    clause = " WHERE " + " AND ".join(where)
+
+    total = (db.query_one(f"SELECT COUNT(*) AS n FROM media_items i{clause}", tuple(params)) or {"n": 0})["n"]
+    page = db.query(
+        f"SELECT i.id FROM media_items i{clause} ORDER BY {SORTS.get(sort, SORTS['added'])} LIMIT ? OFFSET ?",
         (*params, max(1, min(limit, 500)), max(0, offset)),
     )
-    progress = _latest_progress([r["id"] for r in rows])
-    return [_item_dict(r, progress.get(r["id"])) for r in rows], int(total)
+    return hydrate([r["id"] for r in page], online_only), int(total)
+
+
+def hydrate(item_ids: Sequence[str], online_only: bool = True,
+            progress: dict[str, dict[str, Any]] | None = None) -> list[dict[str, Any]]:
+    """Full detail for a known, short list of ids, in the order given.
+
+    `progress` lets a caller supply its own resume marks - continue watching needs the next episode,
+    which is not what the progress table stores.
+    """
+    ids = list(item_ids)
+    if not ids:
+        return []
+    marks = ",".join("?" * len(ids))
+    rows = db.query(f"{_ITEM_SELECT} WHERE i.id IN ({marks}) GROUP BY i.id", tuple(ids))
+    found = progress if progress is not None else _latest_progress(ids)
+    by_id = {r["id"]: _item_dict(r, found.get(r["id"])) for r in rows}
+    return [by_id[i] for i in ids if i in by_id]
 
 
 def continue_watching(limit: int = 20, online_only: bool = True) -> list[dict[str, Any]]:
+    """One row per title, most recent first.
+
+    The progress table is read once and reduced to the newest mark per title before anything else
+    happens, so the work is bounded by `limit` rather than by how much has ever been watched. The old
+    version walked up to 300 marks and ran two queries inside the loop for each of them.
+    """
     rows = db.query(
         "SELECT p.*, f.season, f.episode FROM media_progress p LEFT JOIN media_files f ON f.id = p.file_id "
         "ORDER BY p.updated DESC LIMIT 300"
     )
+    newest: list[dict[str, Any]] = []
     seen: set[str] = set()
-    out: list[dict[str, Any]] = []
     for p in rows:
         if p["item_id"] in seen:
             continue
         seen.add(p["item_id"])
-        mark: dict[str, Any] | None = None
+        newest.append(p)
+
+    marks: list[dict[str, Any]] = []
+    for p in newest:
         if not p["finished"] and p["position"] >= RESUME_MIN_SECONDS:
-            mark = p
+            marks.append(p)
         elif p["finished"] and p["episode"]:
             nxt = next_episode(p["file_id"], online_only)
             if nxt:
-                mark = {**p, "file_id": nxt["id"], "position": 0.0, "duration": nxt["duration"], "finished": 0,
-                        "season": nxt["season"], "episode": nxt["episode"]}
-        row = _item_row(p["item_id"]) if mark else None
-        if not row:
-            continue
-        item = _item_dict(row, mark)
-        if online_only and not item["online"]:
-            continue
-        out.append(item)
-        if len(out) >= limit:
-            break
-    return out
+                marks.append({**p, "file_id": nxt["id"], "position": 0.0, "duration": nxt["duration"],
+                              "finished": 0, "season": nxt["season"], "episode": nxt["episode"]})
+        if len(marks) >= limit:
+            break  # the rest would be thrown away, so it is never fetched
+
+    by_item = {m["item_id"]: m for m in marks}
+    found = {item["id"]: item for item in hydrate(list(by_item), online_only, by_item)}
+    out = [found[m["item_id"]] for m in marks if m["item_id"] in found]
+    if online_only:
+        out = [item for item in out if item["online"]]
+    return out[:limit]
 
 
 def counts(online_only: bool = True) -> dict[str, int]:
-    having = "(i.kind = 'link' OR files_online > 0)" if online_only else "(i.kind = 'link' OR files > 0)"
-    rows = db.query(f"SELECT kind, COUNT(*) AS n FROM ({_ITEM_SELECT} GROUP BY i.id HAVING {having}) GROUP BY kind")
+    present = _present(online_only)
+    rows = db.query(f"SELECT i.kind, COUNT(*) AS n FROM media_items i WHERE {present} GROUP BY i.kind")
     by_kind = {r["kind"]: int(r["n"]) for r in rows}
     episodes = db.query_one(
         "SELECT COUNT(*) AS n FROM media_files f JOIN media_items i ON i.id = f.item_id JOIN drives d ON d.id = f.drive_id "
