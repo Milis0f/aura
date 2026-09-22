@@ -174,15 +174,19 @@ select option { background: var(--surface-2); }
 
 /* ------------------------------------------------------------------ shell */
 .app { position: relative; z-index: 1; display: grid; height: 100%; grid-template-columns: var(--rail, 64px) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); grid-template-areas: "top top" "rail content"; }
-.topbar { grid-area: top; display: flex; align-items: center; gap: 14px; height: 62px; padding: 0 var(--pad, 26px); border-bottom: 1px solid var(--line-soft); background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(14px); }
+.topbar { grid-area: top; position: relative; display: flex; align-items: center; gap: 14px; height: 68px; padding: 0 var(--pad, 26px); border-bottom: 1px solid var(--line-soft); background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(14px); }
 .menu-btn { display: none; place-items: center; width: 38px; height: 38px; border: 0; border-radius: 9px; background: transparent; cursor: pointer; }
 .brand { display: flex; align-items: center; gap: 10px; }
-.brand-name { font-size: 17px; font-weight: 650; letter-spacing: -0.03em; }
+/* The name lives on the sign-in screen; up here it is just a pixel of light saying the box is awake. */
+.brand-name { display: none; }
 .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: pulse 2.4s var(--ease) infinite; }
 .pulse.busy { animation-duration: 0.9s; }
 @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(var(--accent-rgb), 0.4); } 70% { box-shadow: 0 0 0 9px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
-.searchwrap { position: relative; flex: 1; max-width: 460px; margin-left: 8px; }
-.searchwrap input { padding-left: 38px; padding-right: 38px; background: var(--surface); }
+.searchwrap, .searchwrap-ghost { position: absolute; top: 50%; left: 50%; width: min(620px, calc(100% - 420px)); margin: 0; transform: translate(-50%, -50%); }
+.searchwrap { z-index: 2; }
+.searchwrap input { height: 44px; padding-left: 44px; padding-right: 38px; font-size: 15px; background: var(--surface); }
+.searchwrap input:focus { background: var(--surface-2); }
+.search-ic { left: 15px; }
 .search-ic { position: absolute; top: 50%; left: 12px; display: grid; color: var(--ink-4); pointer-events: none; translate: 0 -50%; }
 .search-x { position: absolute; top: 50%; right: 5px; display: grid; place-items: center; width: 30px; height: 30px; border: 0; border-radius: 7px; background: transparent; color: var(--ink-3); cursor: pointer; translate: 0 -50%; }
 .now-pill { display: inline-flex; align-items: center; gap: 8px; max-width: 300px; padding: 6px 12px; border: 1px solid rgba(var(--accent-rgb), 0.3); border-radius: 99px; background: var(--accent-soft); color: var(--accent-hi); font-size: 13px; cursor: pointer; }
@@ -193,6 +197,7 @@ select option { background: var(--surface-2); }
 .tp-item b { min-width: 3ch; text-align: right; font-weight: 500; color: var(--ink); }
 .tp-item small { font-size: 11px; color: var(--ink-4); }
 .topbar-actions { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+.brand { margin-right: auto; }
 
 /* A strip of icons at rest. Hovering it - or tabbing into it - widens it OVER the content instead of
    pushing it, so the poster wall never reflows and nothing jumps under the pointer. The labels are
@@ -217,7 +222,8 @@ select option { background: var(--surface-2); }
 .rail-link:hover { background: var(--surface); color: var(--ink); }
 
 .content { grid-area: content; position: relative; overflow: hidden; }
-.view { position: absolute; inset: 0; display: none; overflow-y: auto; padding: 22px var(--pad, 26px) 56px; }
+/* On a 3000px panel, edge-to-edge rows are unreadable: the column caps and centres itself. */
+.view { position: absolute; inset: 0; display: none; overflow-y: auto; padding: 26px max(var(--pad, 26px), calc((100% - 1760px) / 2)) 64px; }
 .view.is-active { display: block; animation: aura-rise 0.32s var(--ease) backwards; }
 .view-head { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 18px; }
 .view-title { margin: 0; font-size: 22px; font-weight: 650; letter-spacing: -0.03em; }
@@ -241,10 +247,13 @@ select option { background: var(--surface-2); }
 .sk-row { height: 52px; margin-bottom: 6px; border-radius: 10px; }
 
 /* ------------------------------------------------------------------ library */
-.lib-hero { position: relative; display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 0.6fr); min-height: 300px; margin-bottom: 24px; overflow: hidden; border: 1px solid var(--line-soft); border-radius: 22px; background: var(--surface); box-shadow: var(--refract), var(--shadow-1); }
-.lib-hero .bg { position: absolute; inset: -48px; background-position: center 30%; background-size: cover; filter: blur(40px) saturate(120%) brightness(0.42); }
+.lib-hero { position: relative; display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 0.6fr); min-height: 440px; margin-bottom: 24px; overflow: hidden; border: 1px solid var(--line-soft); border-radius: 22px; background: var(--surface); box-shadow: var(--refract), var(--shadow-1); }
+/* A still frame behind a title looks like a dead screen; 26 seconds of drift is enough to read as alive
+   without ever catching the eye. Transform only, so it stays on the compositor. */
+.lib-hero .bg { position: absolute; inset: -64px; background-position: center 30%; background-size: cover; filter: blur(40px) saturate(120%) brightness(0.42); animation: hero-drift 26s ease-in-out infinite alternate; will-change: transform; }
+@keyframes hero-drift { from { transform: scale(1) translate3d(0, 0, 0); } to { transform: scale(1.1) translate3d(-1.5%, -1%, 0); } }
 .lib-hero .veil { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(10, 13, 18, 0.95) 0%, rgba(10, 13, 18, 0.72) 55%, rgba(10, 13, 18, 0.3) 100%); }
-.lib-hero .txt { position: relative; align-self: end; padding: 34px 38px; }
+.lib-hero .txt { position: relative; align-self: end; padding: 44px 48px; }
 .kicker { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent-hi); }
 .lib-hero h2 { margin: 10px 0 8px; font-size: clamp(28px, 3.4vw, 44px); font-weight: 700; letter-spacing: -0.045em; line-height: 1.02; }
 .hero-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 12px; font-size: 13.5px; color: var(--ink-2); }
@@ -252,8 +261,9 @@ select option { background: var(--surface-2); }
 .hero-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
 .hero-progress { max-width: 340px; margin-top: 14px; }
 .lib-hero .art { position: relative; display: grid; place-items: center; padding: 26px 36px 26px 0; }
-.lib-hero .art .frame { position: relative; width: min(210px, 100%); aspect-ratio: 2 / 3; overflow: hidden; border-radius: 14px; border: 1px solid var(--line-1); box-shadow: var(--shadow-2); }
+.lib-hero .art .frame { position: relative; width: min(300px, 100%); aspect-ratio: 2 / 3; overflow: hidden; border-radius: 14px; border: 1px solid var(--line-1); box-shadow: var(--shadow-2); }
 .lib-hero .art img { width: 100%; height: 100%; object-fit: cover; }
+.lib-hero .art .frame { animation: aura-rise 0.7s var(--ease) backwards; animation-delay: 0.12s; }
 .meter { height: 4px; overflow: hidden; border-radius: 2px; background: var(--line); }
 .meter i { display: block; height: 100%; background: var(--accent); }
 
@@ -264,7 +274,7 @@ select option { background: var(--surface-2); }
 .chips-row::-webkit-scrollbar { display: none; }
 .toggle { display: inline-flex; align-items: center; gap: 9px; font-size: 13.5px; color: var(--ink-3); cursor: pointer; }
 
-.hscroll { display: grid; grid-auto-columns: minmax(250px, 290px); grid-auto-flow: column; gap: 14px; overflow-x: auto; padding: 4px 2px 14px; scroll-snap-type: x proximity; scrollbar-width: thin; }
+.hscroll { display: grid; grid-auto-columns: minmax(330px, 380px); grid-auto-flow: column; gap: 14px; overflow-x: auto; padding: 4px 2px 14px; scroll-snap-type: x proximity; scrollbar-width: thin; }
 .wide-card { position: relative; display: block; padding: 0; overflow: hidden; text-align: left; border: 1px solid var(--line-soft); border-radius: 16px; background: var(--surface); cursor: pointer; scroll-snap-align: start; transition: transform 0.25s var(--ease), border-color 0.2s var(--ease); }
 .wide-card:hover { transform: translateY(-3px); border-color: var(--line); }
 .wide-card:active { transform: scale(0.98); }
@@ -275,7 +285,7 @@ select option { background: var(--surface-2); }
 .wc-title { overflow: hidden; font-size: 14.5px; font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
 .wc-sub { font-size: 12.5px; color: var(--ink-3); }
 
-.poster-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(152px, 1fr)); gap: 20px 14px; }
+.poster-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(208px, 1fr)); gap: 30px 20px; }
 .poster-card { position: relative; display: block; padding: 0; border: 0; background: transparent; text-align: left; cursor: pointer; }
 .poster-card:focus-visible { outline: none; }
 .pc-art { position: relative; aspect-ratio: 2 / 3; overflow: hidden; border: 1px solid var(--line-soft); border-radius: 14px; background: var(--surface-2); box-shadow: var(--refract); transition: transform 0.28s var(--ease), border-color 0.2s var(--ease), box-shadow 0.28s var(--ease); }
@@ -288,8 +298,8 @@ article.poster-card { cursor: default; }
 .pc-art .meter { position: absolute; right: 10px; bottom: 10px; left: 10px; background: rgba(7, 9, 13, 0.72); }
 .pc-play { position: absolute; right: 10px; bottom: 20px; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; color: var(--accent-ink); background: var(--accent); box-shadow: var(--shadow-1); opacity: 0; transform: translateY(6px); transition: opacity 0.2s var(--ease), transform 0.25s var(--ease); }
 .poster-card:hover .pc-play, .poster-card:focus-visible .pc-play { opacity: 1; transform: none; }
-.pc-meta { padding: 9px 3px 0; }
-.pc-title { overflow: hidden; font-size: 14px; font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
+.pc-meta { padding: 12px 3px 0; }
+.pc-title { overflow: hidden; font-size: 15px; font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
 .pc-sub { overflow: hidden; font-size: 12.5px; white-space: nowrap; text-overflow: ellipsis; color: var(--ink-3); }
 .poster-card.offline .pc-art img { filter: grayscale(0.85) brightness(0.5); }
 .poster-card.offline .pc-art::after { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(135deg, transparent 0 11px, rgba(7, 9, 13, 0.28) 11px 22px); }
@@ -518,7 +528,7 @@ article.poster-card { cursor: default; }
   .lib-hero { grid-template-columns: 1fr; min-height: 0; }
   .lib-hero .art { display: none; }
   .lib-hero .txt { padding: 24px 20px; }
-  .poster-grid { grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 16px 10px; }
+  .poster-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 20px 12px; }
   .drive { grid-template-columns: 44px minmax(0, 1fr); }
   .drive-ic { width: 44px; height: 44px; }
   .drive-actions { grid-column: 1 / -1; justify-content: flex-start; max-width: none; }
@@ -552,7 +562,7 @@ body.tv .ic { flex-basis: 44px; width: 44px; height: 44px; }
 body.tv .btn { padding: 13px 20px; font-size: 16px; }
 body.tv .icon-btn { width: 44px; height: 44px; }
 body.tv .row-actions { opacity: 1; }
-body.tv .poster-grid { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+body.tv .poster-grid { grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); }
 body.tv :focus-visible { outline: 3px solid var(--accent); outline-offset: 5px; box-shadow: 0 0 0 7px var(--accent-soft); }
 
 @media (prefers-reduced-motion: reduce) {
@@ -623,7 +633,6 @@ body.tv :focus-visible { outline: 3px solid var(--accent); outline-offset: 5px; 
 /* The field is measured in the top bar, pinned as fixed at those coordinates, then handed here. Only
    top/left/width/transform move, so the browser animates it instead of relaying out the page. */
 .searchwrap { transition: top 0.42s var(--ease), left 0.42s var(--ease), width 0.42s var(--ease), transform 0.42s var(--ease); }
-.searchwrap-ghost { flex: 1; max-width: 460px; margin-left: 8px; }
 body.searching .searchwrap { z-index: 49; top: 21vh; left: 50%; width: min(700px, 92vw); max-width: none; transform: translateX(-50%); }
 body.searching .searchwrap input { height: 58px; padding-left: 50px; font-size: 19px; border-color: var(--line-2); background: var(--surface-2); box-shadow: var(--shadow-2); }
 body.searching .search-ic { left: 18px; font-size: 20px; color: var(--ink-2); }
@@ -671,3 +680,7 @@ body.searching .search-ic { left: 18px; font-size: 20px; color: var(--ink-2); }
 @media (prefers-reduced-motion: reduce) {
   .dl-land, .dl-land .i { animation: none; }
 }
+
+/* A setting that needs a field rather than a switch stacks instead of sitting on one line. */
+.opt.stack { display: grid; gap: 10px; cursor: default; }
+.tmdb-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }

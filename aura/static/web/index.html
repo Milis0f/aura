@@ -131,6 +131,9 @@
       <label class="opt"><span>Lire par défaut</span><select id="optPlayTarget"><option value="tv">Sur la TV</option><option value="here">Sur cet appareil</option></select></label>
       <label class="opt"><span>Enchaîner les épisodes</span><input type="checkbox" id="optAutoplay" class="sw"></label>
       <label class="opt"><span>Monter les disques branchés<small>Détection automatique des films</small></span><input type="checkbox" id="optAutomount" class="sw"></label>
+      <div class="opt stack"><span>Clé TMDB<small id="tmdbState">Sans clé, Aura affiche un carton à la place des affiches.</small></span>
+        <span class="tmdb-row"><input id="optTmdb" type="password" autocomplete="off" spellcheck="false" placeholder="Clé API TMDB (v3)" aria-label="Clé API TMDB">
+        <button class="btn" id="tmdbSave" type="button">Enregistrer</button></span></div>
     </section>
     <section class="group">
       <h3>Fichiers</h3>

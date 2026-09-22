@@ -151,5 +151,5 @@
 @keyframes aura-drift { from { transform: translate3d(-4%, 0, 0) scale(1); } to { transform: translate3d(4%, 3%, 0) scale(1.08); } }
 
 @media (prefers-reduced-motion: reduce) {
-  .rise, .sk::after, .live-dot, .aura-ground::before { animation: none; }
+  .rise, .sk::after, .live-dot, .aura-ground::before, .lib-hero .bg { animation: none; }
 }

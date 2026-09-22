@@ -1,5 +1,5 @@
 /* Aura web — boot, navigation, settings panel, live events from the box. */
-import { $, $$, h, api, state, opt, saveOpt, applyOpts, events, toast, hydrate, spatialMove, topLayer, debounce } from "./core.js";
+import { $, $$, h, api, state, opt, saveOpt, applyOpts, busy, events, toast, hydrate, spatialMove, topLayer, debounce } from "./core.js";
 import * as searchOverlay from "./search-overlay.js";
 import * as auth from "./auth.js";
 import * as viewer from "./viewer.js";
@@ -89,6 +89,28 @@ function serverToggle(selector, key) {
   };
 }
 
+/** Posters and summaries all come from TMDB; without a key the library is a wall of typography. The
+    field only ever sends a new key - the server never gives the stored one back. */
+function tmdbField() {
+  const input = $("#optTmdb");
+  const save = $("#tmdbSave");
+  const note = $("#tmdbState");
+  const stored = serverSettings.tmdb_api_key_set === "1";
+  input.placeholder = stored ? "Clé enregistrée — colle une nouvelle clé pour la remplacer" : "Clé API TMDB (v3)";
+  note.textContent = stored
+    ? "Affiches et résumés activés. Laisse vide pour garder la clé actuelle."
+    : "Sans clé, Aura affiche un carton à la place des affiches.";
+  save.onclick = () => busy(save, async () => {
+    const value = input.value.trim();
+    if (!value) { toast("Colle une clé, ou laisse le champ tel quel.", "err"); return; }
+    await api("/api/settings", { method: "PUT", json: { values: { tmdb_api_key: value } } });
+    serverSettings.tmdb_api_key_set = "1";
+    input.value = "";
+    tmdbField();
+    toast("Clé enregistrée. Les affiches arrivent au prochain scan.", "ok", "check");
+  });
+}
+
 function buildSettings() {
   bind("#optDensity", "density");
   bind("#optAurora", "aurora", true);
@@ -101,6 +123,7 @@ function buildSettings() {
   bind("#optRefresh", "refresh", false, () => events.emit("downloads-options"));
   serverToggle("#optAutoplay", "autoplay_next");
   serverToggle("#optAutomount", "automount");
+  tmdbField();
   $("#btn2faLabel").textContent = state.has2fa ? "Désactiver la double authentification" : "Activer la double authentification";
   $("#panelVersion").textContent = `Aura ${state.version} · connecté en ${state.user}`;
 }
