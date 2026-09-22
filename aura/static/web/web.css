@@ -201,6 +201,9 @@ select option { background: var(--surface-2); }
 .rail:hover, .rail:focus-within { width: 252px; background: var(--surface); box-shadow: 30px 0 70px -34px #000; }
 .rail-label { white-space: nowrap; opacity: 0; transition: opacity 0.2s var(--ease); }
 .rail:hover .rail-label, .rail:focus-within .rail-label { opacity: 1; transition-delay: 0.06s; }
+/* The strip is 40px of usable width: a button keeps its icon centred and drops the words entirely,
+   rather than showing half of one. */
+.rail #logoutBtn { justify-content: flex-start; gap: 15px; width: 100%; padding-left: 9px; white-space: nowrap; }
 .rail-btn { position: relative; flex: none; display: flex; align-items: center; gap: 15px; padding: 11px 10px; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--ink-3); font-size: 14.5px; text-align: left; cursor: pointer; transition: background-color 0.18s var(--ease), color 0.18s var(--ease); }
 .rail-btn .i { font-size: 19px; }
 .rail-btn:hover { background: var(--surface); color: var(--ink); }
@@ -614,4 +617,57 @@ body.tv :focus-visible { outline: 3px solid var(--accent); outline-offset: 5px; 
    not the window - so this is a container query. The aria-label keeps both buttons named either way. */
 @container (max-width: 200px) {
   .pc-actions .btn .lbl { display: none; }
+}
+
+/* ---------------------------------------------------------------- search overlay */
+/* The field is measured in the top bar, pinned as fixed at those coordinates, then handed here. Only
+   top/left/width/transform move, so the browser animates it instead of relaying out the page. */
+.searchwrap { transition: top 0.42s var(--ease), left 0.42s var(--ease), width 0.42s var(--ease), transform 0.42s var(--ease); }
+.searchwrap-ghost { flex: 1; max-width: 460px; margin-left: 8px; }
+body.searching .searchwrap { z-index: 49; top: 21vh; left: 50%; width: min(700px, 92vw); max-width: none; transform: translateX(-50%); }
+body.searching .searchwrap input { height: 58px; padding-left: 50px; font-size: 19px; border-color: var(--line-2); background: var(--surface-2); box-shadow: var(--shadow-2); }
+body.searching .search-ic { left: 18px; font-size: 20px; color: var(--ink-2); }
+
+.search-scrim { position: fixed; inset: 0; z-index: 48; background: rgba(0, 0, 0, 0.66); backdrop-filter: blur(16px); opacity: 0; transition: opacity 0.4s var(--ease); }
+.search-scrim.is-on { opacity: 1; }
+
+.search-panel { position: fixed; z-index: 49; top: calc(21vh + 82px); right: 0; left: 0; padding: 0 max(28px, 4vw) 30px; opacity: 0; transform: translateY(12px); transition: opacity 0.4s var(--ease), transform 0.45s var(--ease); }
+.search-panel.is-on { opacity: 1; transform: none; transition-delay: 0.1s; }
+.sr-hint { margin: 0 0 16px; font-size: 13px; text-align: center; color: var(--ink-3); }
+.sr-row { display: flex; align-items: flex-start; gap: 16px; overflow-x: auto; overflow-y: hidden; justify-content: safe center; padding-bottom: 12px; scrollbar-width: thin; }
+.sr-card { flex: 0 0 148px; padding: 0; border: 0; background: transparent; text-align: left; cursor: pointer; animation: aura-rise 0.4s var(--ease) backwards; }
+.sr-card:nth-child(2) { animation-delay: 40ms; }
+.sr-card:nth-child(3) { animation-delay: 80ms; }
+.sr-card:nth-child(4) { animation-delay: 120ms; }
+.sr-card:nth-child(5) { animation-delay: 160ms; }
+.sr-card:nth-child(n+6) { animation-delay: 200ms; }
+.sr-art { position: relative; aspect-ratio: 2 / 3; overflow: hidden; border: 1px solid var(--line-1); border-radius: 12px; background: var(--surface-2); transition: transform 0.26s var(--ease), border-color 0.2s var(--ease); }
+.sr-art img { width: 100%; height: 100%; object-fit: cover; }
+.sr-card:hover .sr-art, .sr-card:focus-visible .sr-art { transform: translateY(-5px); border-color: var(--line-2); }
+.sr-card:focus-visible { outline: none; }
+.sr-card:focus-visible .sr-art { outline: 2px solid var(--accent); outline-offset: 3px; }
+.sr-card.offline .sr-art img { filter: grayscale(0.85) brightness(0.5); }
+.sr-blank { display: grid; place-items: center; width: 100%; height: 100%; font-size: 26px; font-weight: 700; color: var(--ink-4); }
+/* Micro-badges: quality and the audio tracks the file name declares. */
+.sr-tags { position: absolute; right: 6px; bottom: 6px; left: 6px; display: flex; flex-wrap: wrap; gap: 4px; }
+.sr-tag { display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px; border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 5px; background: rgba(0, 0, 0, 0.72); font: 600 10px/1.5 var(--mono); letter-spacing: 0.04em; color: var(--ink-2); backdrop-filter: blur(4px); }
+.sr-name { overflow: hidden; margin-top: 8px; font-size: 13.5px; font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
+.sr-sub { overflow: hidden; font-size: 12px; white-space: nowrap; text-overflow: ellipsis; color: var(--ink-4); }
+
+@media (max-width: 760px) {
+  body.searching .searchwrap { top: 12vh; width: 92vw; }
+  .search-panel { top: calc(12vh + 74px); padding: 0 16px 20px; }
+  .sr-row { justify-content: flex-start; }
+  .sr-card { flex-basis: 116px; }
+}
+
+/* ---------------------------------------------------------------- download in flight */
+/* Green is one of the two colours that survived the black: it only ever means "a download is moving". */
+.dl-fly { position: fixed; z-index: 60; border-radius: 50%; background: radial-gradient(circle at 34% 30%, #7ff0b6, var(--dl) 62%, #0d7a45); box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18), 0 12px 40px -8px rgba(53, 208, 127, 0.7); pointer-events: none; }
+.dl-land { animation: dl-land 0.62s var(--ease); }
+.dl-land .i { animation: dl-land-icon 0.62s var(--ease); }
+@keyframes dl-land { 0% { background: transparent; } 26% { background: rgba(53, 208, 127, 0.22); } 100% { background: transparent; } }
+@keyframes dl-land-icon { 0% { transform: none; color: inherit; } 30% { transform: scale(1.32) translateY(2px); color: var(--dl); } 100% { transform: none; color: inherit; } }
+@media (prefers-reduced-motion: reduce) {
+  .dl-land, .dl-land .i { animation: none; }
 }

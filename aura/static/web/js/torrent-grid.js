@@ -5,6 +5,7 @@
    it finds nothing. */
 import { h, I, api, toast, busy, bytes, stagger, emptyState } from "./core.js";
 import { openCard, posterArt } from "./torrent-sheet.js";
+import { flyToDownloads } from "./fly-to-downloads.js";
 
 const SORTS = [
   { key: "seeders", label: "Sources", dir: "desc" },
@@ -76,7 +77,7 @@ export function resultGrid({ onSearch, onStarted }) {
       h("div", { class: "pc-actions" },
         h("button", { class: "btn small", title: "Fiche", "aria-label": `Fiche de ${entry.title}`, onclick: () => openCard(entry, { onStarted }) },
           I("info"), h("span", { class: "lbl" }, "Fiche")),
-        h("button", { class: "btn small primary", title: "Télécharger", "aria-label": `Télécharger ${entry.title}`, onclick: (event) => busy(event.currentTarget, () => grab(entry)) },
+        h("button", { class: "btn small primary", title: "Télécharger", "aria-label": `Télécharger ${entry.title}`, onclick: (event) => busy(event.currentTarget, () => grab(entry, event.currentTarget.closest(".poster-card"))) },
           I("download"), h("span", { class: "lbl" }, "Télécharger"))));
     const bits = [entry.year, entry.size ? bytes(entry.size) : "", entry.seeders == null ? "" : `${entry.seeders} sources`];
     return stagger(h("article", { class: "poster-card" }, art,
@@ -85,12 +86,13 @@ export function resultGrid({ onSearch, onStarted }) {
         h("div", { class: "pc-sub" }, bits.filter(Boolean).join(" · ")))), index);
   }
 
-  async function grab(entry) {
+  async function grab(entry, card) {
     const release = entry.releases[0];
     await api("/api/torrents/add", {
       method: "POST",
       form: { magnet: release.magnet || release.torrent_url, category: entry.media === "tv" ? "Series" : "Films", volume: "" },
     });
+    flyToDownloads(card);
     toast(`« ${entry.title} » part dans qBittorrent.`, "ok", "download");
     if (onStarted) onStarted();
   }

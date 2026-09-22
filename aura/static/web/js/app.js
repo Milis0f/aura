@@ -1,5 +1,6 @@
 /* Aura web — boot, navigation, settings panel, live events from the box. */
 import { $, $$, h, api, state, opt, saveOpt, applyOpts, events, toast, hydrate, spatialMove, topLayer, debounce } from "./core.js";
+import * as searchOverlay from "./search-overlay.js";
 import * as auth from "./auth.js";
 import * as viewer from "./viewer.js";
 import * as library from "./library.js";
@@ -213,6 +214,7 @@ events.on("unauthorized", () => { state.csrf = ""; auth.check(); });
 
 applyOpts();
 hydrate();
+searchOverlay.init();
 if (/\b(SmartTV|Tizen|Web0S|WebOS|BRAVIA|AFT[A-Z]|GoogleTV|HbbTV)\b/i.test(navigator.userAgent) && !opt.tv) {
   opt.tv = true;
   saveOpt();

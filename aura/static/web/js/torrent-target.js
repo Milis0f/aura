@@ -6,6 +6,7 @@
 
    The chosen mode and destination are always spelled out before anything starts. */
 import { h, I, api, toast, busy, bytes } from "./core.js";
+import { flyToDownloads } from "./fly-to-downloads.js";
 
 const MODES = [
   { key: "server", icon: "drive", label: "Serveur", hint: "qBittorrent télécharge sur le boîtier" },
@@ -78,6 +79,7 @@ export function targetPicker({ value, onChange, release, onStarted }) {
 
     async function start() {
       await api("/api/torrents/add", { method: "POST", form: { magnet: link(), category: value.category, volume: volume.value || "" } });
+      flyToDownloads(el.closest(".sheet") ? el.closest(".dt-body") : el);
       toast("Téléchargement lancé sur le boîtier.", "ok", "download");
       if (onStarted) onStarted();
     }
