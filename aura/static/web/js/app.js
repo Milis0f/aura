@@ -19,16 +19,13 @@ function go(name, arg) {
   if (!VIEWS[name] || (name === "downloads" && !state.canTorrent)) name = "library";
   state.view = name;
   $$(".view").forEach((section) => section.classList.toggle("is-active", section.dataset.view === name));
-  $$(".rail-btn, .tab").forEach((button) => button.classList.toggle("is-active", button.dataset.view === name));
+  // No navigation chrome to highlight any more: the body carries the current screen so CSS can react,
+  // which is how the home gets its own bare layout.
+  document.body.dataset.view = name;
   const section = $(`.view[data-view="${name}"]`);
   if (!mounted.has(name)) { VIEWS[name].mount(section); mounted.add(name); }
   VIEWS[name].show(arg);
-  const search = $("#search");
-  search.placeholder = HINTS[name] || "Rechercher un film, une série";
-  search.value = VIEWS[name].query ? VIEWS[name].query() : "";
-  $("#searchClear").hidden = !search.value;
   if (location.hash !== `#${name}`) history.replaceState(null, "", `#${name}`);
-  closeRail();
 }
 events.on("navigate", ({ view, arg }) => go(view, arg));
 window.addEventListener("hashchange", () => {
@@ -49,13 +46,28 @@ $("#searchClear").addEventListener("click", () => {
   $("#search").focus();
 });
 
-$$(".rail-btn, .tab").forEach((button) => button.addEventListener("click", () => go(button.dataset.view)));
-const isPhone = () => window.matchMedia("(max-width: 900px)").matches;
-function openRail() { $("#rail").hidden = false; $("#railScrim").hidden = false; }
-function closeRail() { if (isPhone()) $("#rail").hidden = true; $("#railScrim").hidden = true; }
-$("#menuBtn").addEventListener("click", openRail);
-$("#railScrim").addEventListener("click", closeRail);
-if (isPhone()) $("#rail").hidden = true;
+/** Every place the field can take you. The palette renders from this, so adding a screen here is
+    all it takes for it to become reachable - there is no menu to remember to update. */
+export const SCREENS = [
+  { view: "library", label: "Bibliothèque", icon: "film" },
+  { view: "drives", label: "Disques", icon: "drive" },
+  { view: "files", label: "Fichiers", icon: "folder" },
+  { view: "downloads", label: "Téléchargements", icon: "download", needs: "canTorrent" },
+  { view: "system", label: "Système", icon: "gauge" },
+];
+
+export const ACTIONS = [
+  { label: "Réglages", icon: "sliders", run: () => openPanel() },
+  { label: "Télécommande TV", icon: "remote", run: () => { location.href = "/remote/"; } },
+  { label: "Se déconnecter", icon: "logout", run: () => auth.logout() },
+];
+
+export function reachable() {
+  return [
+    ...SCREENS.filter((screen) => !screen.needs || state[screen.needs]).map((screen) => ({ ...screen, kind: "écran" })),
+    ...ACTIONS.map((action) => ({ ...action, kind: "action" })),
+  ];
+}
 
 /* ---------------------------------------------------------------- settings */
 async function syncServerSettings() {
@@ -130,14 +142,12 @@ function buildSettings() {
 
 function openPanel() { buildSettings(); $("#settings").hidden = false; $("#panelScrim").hidden = false; }
 function closePanel() { $("#settings").hidden = true; $("#panelScrim").hidden = true; }
-$("#settingsBtn").addEventListener("click", openPanel);
 $("#settingsClose").addEventListener("click", closePanel);
 $("#panelScrim").addEventListener("click", closePanel);
 $("#btnPassword").addEventListener("click", auth.changePassword);
 $("#btn2fa").addEventListener("click", auth.twoFactor);
 $("#btnSessions").addEventListener("click", auth.devices);
 $("#btnAudit").addEventListener("click", auth.activity);
-$("#logoutBtn").addEventListener("click", auth.logout);
 events.on("account-changed", () => { if (!$("#settings").hidden) buildSettings(); });
 
 /* ---------------------------------------------------------------- live events */
@@ -162,12 +172,9 @@ function connectSocket() {
 setInterval(() => { if (socket && socket.readyState === 1) socket.send(JSON.stringify({ type: "ping" })); }, 25000);
 
 function updateNow(player) {
+  // What is playing is shown by the home's resume strip now, where it belongs: on the poster.
   state.player = player || null;
-  const active = Boolean(player && player.backend && player.backend !== "idle" && player.name);
-  $("#nowPill").hidden = !active;
-  if (active) $("#nowPill .now-text").textContent = `Sur la TV · ${player.name}`;
 }
-$("#nowPill").addEventListener("click", () => { location.href = "/remote/"; });
 
 function handleEvent(message) {
   const drive = message.drive || {};
@@ -200,9 +207,14 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
     if (!$("#detail").hidden) { library.closeDetail(); return; }
     if (!$("#settings").hidden) { closePanel(); return; }
-    if (isPhone() && !$("#rail").hidden) { closeRail(); return; }
+    if (searchOverlay.isOpen()) { searchOverlay.close(); return; }
   }
-  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") { event.preventDefault(); $("#search").focus(); return; }
+  // One shortcut for the one field: it searches the library and it reaches every screen.
+  if ((event.ctrlKey || event.metaKey) && ["k", "f"].includes(event.key.toLowerCase())) {
+    event.preventDefault();
+    searchOverlay.open();
+    return;
+  }
   const directions = { ArrowLeft: "left", ArrowRight: "right", ArrowUp: "up", ArrowDown: "down" };
   if (directions[event.key] && !typing && (opt.tv || topLayer() !== $("#app"))) {
     event.preventDefault();
@@ -221,11 +233,9 @@ function enter(me) {
   });
   $("#gate").hidden = true;
   $("#app").hidden = false;
-  $("#who").textContent = me.username;
-  const jellyfin = $("#jellyLink");
-  jellyfin.hidden = !state.jellyfin;
-  if (state.jellyfin) jellyfin.href = state.jellyfin;
-  $$('.rail-btn[data-view="downloads"], .tab[data-view="downloads"]').forEach((button) => { button.hidden = !state.canTorrent; });
+  // The class is dropped once the sequence has run, so a later navigation does not replay it.
+  document.body.classList.add("arriving");
+  setTimeout(() => document.body.classList.remove("arriving"), 2600);
   syncServerSettings();
   connectSocket();
   downloads.start();
@@ -237,7 +247,14 @@ events.on("unauthorized", () => { state.csrf = ""; auth.check(); });
 
 applyOpts();
 hydrate();
-searchOverlay.init();
+searchOverlay.init({ reachable, go });
+$("#openSearch").addEventListener("click", () => searchOverlay.open());
+
+// Scrolled past the stage, the field takes the top instead of staying pinned over the banners.
+// Each view scrolls itself, so the listener rides the container rather than the window.
+$("#content").addEventListener("scroll", (event) => {
+  document.body.classList.toggle("scrolled", event.target.scrollTop > 160);
+}, { capture: true, passive: true });
 if (/\b(SmartTV|Tizen|Web0S|WebOS|BRAVIA|AFT[A-Z]|GoogleTV|HbbTV)\b/i.test(navigator.userAgent) && !opt.tv) {
   opt.tv = true;
   saveOpt();

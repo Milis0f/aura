@@ -109,16 +109,16 @@ async function tick() {
   } finally {
     inFlight = false;
   }
+  // The bars that used to carry these readings are gone. Throughput still drives the ground's glow,
+  // and the count rides the one button that is always on screen.
   const down = torrents.reduce((sum, t) => sum + (t.dl || 0), 0);
-  const up = torrents.reduce((sum, t) => sum + (t.up || 0), 0);
-  $("#throughput").hidden = !(down || up);
-  $("#tpDown").textContent = speed(down);
-  $("#tpUp").textContent = speed(up);
   document.documentElement.style.setProperty("--glow", Math.min(down / (12 * 1048576), 1).toFixed(3));
-  $("#pulse").classList.toggle("busy", down > 0);
   const active = torrents.filter((t) => t.dl > 0).length;
-  $("#dlBadge").hidden = !active;
-  $("#dlBadge").textContent = String(active);
+  const button = $("#openSearch");
+  if (button) {
+    button.dataset.count = active ? String(active) : "";
+    button.classList.toggle("is-busy-dl", active > 0);
+  }
   if (state.view === "downloads" && list) render();
 }
 

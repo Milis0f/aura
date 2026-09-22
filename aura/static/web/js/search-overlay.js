@@ -1,109 +1,127 @@
-/* Aura web — search takes the screen.
+/* Aura web — the field is the interface.
 
-   The field leaves the top bar, settles in the middle, and everything behind it falls away under a blur.
-   Results are posters, right under the field, with the language badges the file names give us.
+   There are no bars any more, so this one element does both jobs: it searches the library, and it is how
+   you reach every other screen. Type "disq" and Disques is offered above the films.
 
-   The move is a FLIP: the field is measured where it sits, switched to fixed at those exact coordinates,
-   and only then handed to CSS for the destination — so the browser animates a real transition instead of
-   teleporting the element. A ghost holds its place in the top bar until it comes back. */
+   The field is never moved by script. It lives outside the app shell and CSS decides where it sits -
+   large and centred on the home, called up from anywhere else. The previous version flew it from the top
+   bar with a FLIP, which is what kept dropping the caret mid-animation. */
 import { $, h, I, api, debounce } from "./core.js";
 import { openDetail } from "./library.js";
 
-const LIMIT = 14;
-const SETTLE_MS = 460;
+const LIMIT = 12;
 
-let wrap, input, ghost, scrim, panel, list, hint;
+let wrap, input, clear, scrim, panel, jumps, list, hint;
+let navigate = null;
+let targets = () => [];
 let open = false;
 let run = 0;
 let abort = null;
 
-export function init() {
-  wrap = $(".searchwrap");
+export function init({ reachable, go } = {}) {
+  wrap = $("#searchwrap");
   input = $("#search");
+  clear = $("#searchClear");
   if (!wrap || !input) return;
+  if (reachable) targets = reachable;
+  navigate = go;
 
   scrim = h("div", { class: "search-scrim", hidden: true, onclick: close });
-  list = h("div", { class: "sr-row" });
+  jumps = h("div", { class: "sr-jumps" });
   hint = h("p", { class: "sr-hint" });
-  panel = h("div", { class: "search-panel", hidden: true }, hint, list);
+  list = h("div", { class: "sr-row" });
+  panel = h("div", { class: "search-panel", hidden: true }, jumps, hint, list);
   document.body.append(scrim, panel);
 
   input.addEventListener("focus", show);
-  input.addEventListener("input", debounce(() => query(input.value.trim()), 260));
+  input.addEventListener("input", debounce(() => query(input.value.trim()), 240));
+  if (clear) clear.addEventListener("click", () => { input.value = ""; clear.hidden = true; query(""); input.focus(); });
+  // Handled on the document rather than on the field: Enter has to work whatever holds the focus,
+  // and the overlay is modal anyway.
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && open) { event.stopPropagation(); close(); }
+    if (!open) return;
+    if (event.key === "Escape") { event.stopPropagation(); close(); return; }
+    if (event.key === "Enter" || event.key === "NumpadEnter") {
+      const first = panel.querySelector(".sr-jump, .sr-card");
+      if (first) { event.preventDefault(); event.stopPropagation(); first.click(); }
+    }
   });
 }
 
 export const isOpen = () => open;
 
+/** Called by the one floating button and by Ctrl+K. */
+export function open_() { show(); input.focus(); }
+export { open_ as open };
+
 function show() {
   if (open) return;
   open = true;
-  const box = wrap.getBoundingClientRect();
-  ghost = h("div", { class: "searchwrap-ghost", style: `width:${box.width}px;height:${box.height}px` });
-  wrap.after(ghost);
-  wrap.style.cssText = `position:fixed;top:${box.top}px;left:${box.left}px;width:${box.width}px;margin:0`;
-  document.body.append(wrap);
-  input.focus(); // re-parenting the field drops the caret, and the whole point is that you keep typing
   document.body.classList.add("searching");
-  scrim.hidden = false;
-  panel.hidden = false;
-  requestAnimationFrame(() => {
-    scrim.classList.add("is-on");
-    panel.classList.add("is-on");
-    // Cleared, not overwritten: the stylesheet owns the destination.
-    wrap.style.top = wrap.style.left = wrap.style.width = "";
-  });
+  scrim.hidden = panel.hidden = false;
+  requestAnimationFrame(() => { scrim.classList.add("is-on"); panel.classList.add("is-on"); });
   query(input.value.trim());
 }
 
-function close() {
+export function close() {
   if (!open) return;
   open = false;
   if (abort) abort.abort();
-  const box = ghost.getBoundingClientRect();
-  wrap.style.transform = "none";
-  wrap.style.top = `${box.top}px`;
-  wrap.style.left = `${box.left}px`;
-  wrap.style.width = `${box.width}px`;
+  document.body.classList.remove("searching");
   scrim.classList.remove("is-on");
   panel.classList.remove("is-on");
-  document.body.classList.remove("searching");
   input.blur();
-
-  let settled = false;
-  const settle = () => {
-    if (settled) return;
-    settled = true;
-    if (ghost) { ghost.replaceWith(wrap); ghost = null; }
-    wrap.removeAttribute("style");
-    scrim.hidden = true;
-    panel.hidden = true;
+  setTimeout(() => {
+    if (open) return;
+    scrim.hidden = panel.hidden = true;
     list.replaceChildren();
-  };
-  wrap.addEventListener("transitionend", settle, { once: true });
-  setTimeout(settle, SETTLE_MS); // a dropped transitionend must not strand the field on top of the page
+    jumps.replaceChildren();
+  }, 320);
+}
+
+/* ---------------------------------------------------------------- results */
+
+function fold(text) {
+  return (text || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+}
+
+/** Screens and actions matching what was typed. Shown first: reaching a screen must never be buried
+    under a film that happens to share a letter. */
+function renderJumps(text) {
+  const needle = fold(text);
+  const found = targets().filter((target) => !needle || fold(target.label).includes(needle));
+  jumps.replaceChildren(...found.slice(0, 6).map((target) => h("button", {
+    class: "sr-jump",
+    onclick: () => {
+      close();
+      if (target.run) setTimeout(target.run, 60);
+      else if (navigate) setTimeout(() => navigate(target.view), 60);
+    },
+  }, I(target.icon), h("span", { class: "sr-jump-label" }, target.label), h("span", { class: "sr-jump-kind" }, target.kind))));
+  return found.length;
 }
 
 async function query(text) {
   if (!open) return;
+  if (clear) clear.hidden = !text;
+  renderJumps(text);
+
   if (text.length < 2) {
-    hint.textContent = "Tape deux lettres. La bibliothèque répond pendant que tu écris.";
+    hint.textContent = "Tape deux lettres : les films de ta bibliothèque, et les écrans par leur nom.";
     list.replaceChildren();
     return;
   }
   if (abort) abort.abort();
   abort = new AbortController();
   const mine = ++run;
-  list.replaceChildren(...Array.from({ length: 6 }, () => h("div", { class: "sr-card" }, h("div", { class: "sk sk-poster" }))));
+  list.replaceChildren(...Array.from({ length: 5 }, () => h("div", { class: "sr-card" }, h("div", { class: "sk sk-poster" }))));
   try {
     const answer = await api(`/api/library/items?q=${encodeURIComponent(text)}&limit=${LIMIT}`, { signal: abort.signal });
     if (mine !== run) return;
     const items = answer.items || [];
     hint.textContent = items.length
       ? `${answer.total} ${answer.total > 1 ? "titres" : "titre"} dans ta bibliothèque`
-      : "Rien sous ce nom dans ta bibliothèque. Les téléchargements cherchent plus loin.";
+      : "Rien sous ce nom dans ta bibliothèque.";
     list.replaceChildren(...items.map(card));
   } catch (error) {
     if (mine !== run || error.name === "AbortError") return;
@@ -124,8 +142,7 @@ function card(item) {
   h("div", { class: "sr-art" }, art,
     h("div", { class: "sr-tags" },
       item.quality ? h("span", { class: "sr-tag" }, item.quality) : null,
-      (item.langs || []).slice(0, 2).map((code) => h("span", { class: "sr-tag" }, code)),
-      item.online ? null : h("span", { class: "sr-tag" }, I("drive")))),
+      (item.langs || []).slice(0, 2).map((code) => h("span", { class: "sr-tag" }, code)))),
   h("div", { class: "sr-name" }, item.title),
   h("div", { class: "sr-sub" }, [item.year, item.kind === "series" ? "Série" : ""].filter(Boolean).join(" · ")));
 }

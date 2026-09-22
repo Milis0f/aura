@@ -280,7 +280,8 @@ def _latest_progress(item_ids: Sequence[str]) -> dict[str, dict[str, Any]]:
 
 
 def items(kind: str | None = None, q: str | None = None, drive_id: str | None = None, sort: str = "added",
-          limit: int = 60, offset: int = 0, online_only: bool = True) -> tuple[list[dict[str, Any]], int]:
+          limit: int = 60, offset: int = 0, online_only: bool = True, genre: str | None = None,
+          decade: str | None = None, quality: str | None = None, lang: str | None = None) -> tuple[list[dict[str, Any]], int]:
     """Two steps on purpose.
 
     Finding which titles belong on the page needs no aggregation at all - it is a filter and a sort over
@@ -300,6 +301,20 @@ def items(kind: str | None = None, q: str | None = None, drive_id: str | None = 
     if drive_id:
         where.append("EXISTS (SELECT 1 FROM media_files f2 WHERE f2.item_id = i.id AND f2.drive_id = ?)")
         params.append(drive_id)
+    # Facets. Genres are a JSON array of strings, so the quotes are part of the match: looking for
+    # "Drama" must not also hit "Dramedy".
+    if genre:
+        where.append("i.genres LIKE ?")
+        params.append(f'%"{genre}"%')
+    if decade and decade.isdigit():
+        where.append("i.year <> '' AND CAST(i.year AS INTEGER) BETWEEN ? AND ?")
+        params += [int(decade), int(decade) + 9]
+    if quality:
+        where.append("EXISTS (SELECT 1 FROM media_files f3 WHERE f3.item_id = i.id AND f3.quality = ?)")
+        params.append(quality)
+    if lang:
+        where.append("EXISTS (SELECT 1 FROM media_files f4 WHERE f4.item_id = i.id AND f4.langs LIKE ?)")
+        params.append(f"%{lang}%")
     where.append(_present(online_only))
     clause = " WHERE " + " AND ".join(where)
 
@@ -365,6 +380,50 @@ def continue_watching(limit: int = 20, online_only: bool = True) -> list[dict[st
     if online_only:
         out = [item for item in out if item["online"]]
     return out[:limit]
+
+
+def facets(online_only: bool = True) -> list[dict[str, Any]]:
+    """The categories worth offering, each with how many titles it holds.
+
+    A shelf with nothing on it is worse than no shelf, so a facet with no titles is never returned. The
+    list degrades with the data: genres come from the metadata chain and are often absent, while type,
+    decade, quality and language are read off the files themselves and are always there.
+    """
+    present = _present(online_only)
+    out: list[dict[str, Any]] = []
+
+    for kind, label in ((FILM, "Films"), (SERIES, "Séries"), (LINK, "Liens")):
+        row = db.query_one(f"SELECT COUNT(*) AS n FROM media_items i WHERE i.kind = ? AND {present}", (kind,))
+        if row and row["n"]:
+            out.append({"facet": "kind", "value": kind, "label": label, "count": int(row["n"])})
+
+    seen: dict[str, int] = {}
+    for row in db.query(f"SELECT i.genres FROM media_items i WHERE i.genres NOT IN ('[]', '') AND {present}"):
+        for name in _genres(row["genres"]):
+            seen[name] = seen.get(name, 0) + 1
+    out += [{"facet": "genre", "value": name, "label": name, "count": n}
+            for name, n in sorted(seen.items(), key=lambda kv: (-kv[1], kv[0]))]
+
+    for row in db.query(
+        f"SELECT (SUBSTR(i.year, 1, 3) || '0') AS decade, COUNT(*) AS n FROM media_items i "
+        f"WHERE i.year <> '' AND {present} GROUP BY decade ORDER BY decade DESC"
+    ):
+        out.append({"facet": "decade", "value": row["decade"], "label": f"Années {row['decade']}", "count": int(row["n"])})
+
+    for row in db.query(
+        f"SELECT f.quality AS v, COUNT(DISTINCT i.id) AS n FROM media_items i JOIN media_files f ON f.item_id = i.id "
+        f"WHERE f.quality <> '' AND {present} GROUP BY f.quality ORDER BY n DESC"
+    ):
+        out.append({"facet": "quality", "value": row["v"], "label": row["v"], "count": int(row["n"])})
+
+    for code in LANG_ORDER:
+        row = db.query_one(
+            f"SELECT COUNT(DISTINCT i.id) AS n FROM media_items i JOIN media_files f ON f.item_id = i.id "
+            f"WHERE f.langs LIKE ? AND {present}", (f"%{code}%",))
+        if row and row["n"]:
+            out.append({"facet": "lang", "value": code, "label": code, "count": int(row["n"])})
+
+    return out
 
 
 def counts(online_only: bool = True) -> dict[str, int]:

@@ -60,39 +60,11 @@
 
 <!-- ================= Application ================= -->
 <div id="app" class="app" hidden>
-  <header class="topbar">
-    <button class="menu-btn" id="menuBtn" aria-label="Menu"><span data-icon="menu"></span></button>
-    <div class="brand"><span class="pulse" id="pulse"></span><span class="brand-name">Aura</span></div>
-    <div class="searchwrap">
-      <span class="search-ic" data-icon="search"></span>
-      <input id="search" placeholder="Rechercher un film, une série" autocomplete="off" spellcheck="false" enterkeyhint="search">
-      <button class="search-x" id="searchClear" hidden aria-label="Effacer"><span data-icon="close"></span></button>
-    </div>
-    <button class="now-pill" id="nowPill" hidden><span class="live-dot"></span><span class="now-text"></span></button>
-    <div class="throughput" id="throughput" hidden>
-      <span class="tp-item"><span data-icon="download"></span><b id="tpDown" class="num">0</b><small>Mo/s</small></span>
-      <span class="tp-item"><span data-icon="upload"></span><b id="tpUp" class="num">0</b><small>Mo/s</small></span>
-    </div>
-    <div class="topbar-actions">
-      <a class="btn ghost" id="jellyLink" href="#" target="_blank" rel="noopener" hidden>Jellyfin</a>
-      <a class="btn ghost icon-only" href="/remote/" aria-label="Télécommande" title="Télécommande"><span data-icon="remote"></span></a>
-      <button class="btn ghost icon-only" id="settingsBtn" aria-label="Réglages" title="Réglages"><span data-icon="sliders"></span></button>
-    </div>
-  </header>
-
-  <nav class="rail" id="rail">
-    <button class="rail-btn" data-view="library"><span data-icon="film"></span><span class="rail-label">Bibliothèque</span></button>
-    <button class="rail-btn" data-view="drives"><span data-icon="drive"></span><span class="rail-label">Disques</span><em class="badge num" id="driveBadge" hidden></em></button>
-    <button class="rail-btn" data-view="files"><span data-icon="folder"></span><span class="rail-label">Fichiers</span></button>
-    <button class="rail-btn" data-view="downloads"><span data-icon="download"></span><span class="rail-label">Téléchargements</span><em class="badge num" id="dlBadge" hidden></em></button>
-    <button class="rail-btn" data-view="system"><span data-icon="gauge"></span><span class="rail-label">Système</span></button>
-    <div class="rail-foot">
-      <a class="rail-link" href="/remote/"><span data-icon="remote"></span><span class="rail-label">Télécommande TV</span></a>
-      <div class="who"><span data-icon="user"></span><span class="rail-label" id="who"></span></div>
-      <button class="btn ghost wide" id="logoutBtn" title="Se déconnecter"><span data-icon="logout"></span><span class="rail-label">Se déconnecter</span></button>
-    </div>
-  </nav>
-  <div class="rail-scrim" id="railScrim" hidden></div>
+  <!-- No bars. The field is the interface: it searches the library and it reaches every screen.
+       Off the home it lives behind this one button, which works with a mouse and with a thumb. -->
+  <button class="open-search" id="openSearch" aria-label="Rechercher ou changer d'écran" title="Rechercher (Ctrl+K)">
+    <span data-icon="search"></span>
+  </button>
 
   <main class="content" id="content">
     <section class="view" data-view="library"></section>
@@ -102,18 +74,18 @@
     <section class="view" data-view="system"></section>
   </main>
 
-  <nav class="tabbar">
-    <button class="tab" data-view="library"><span data-icon="film"></span><span>Films</span></button>
-    <button class="tab" data-view="drives"><span data-icon="drive"></span><span>Disques</span></button>
-    <button class="tab" data-view="files"><span data-icon="folder"></span><span>Fichiers</span></button>
-    <button class="tab" data-view="downloads"><span data-icon="download"></span><span>Transferts</span></button>
-    <button class="tab" data-view="system"><span data-icon="gauge"></span><span>Système</span></button>
-  </nav>
-
   <aside class="uploads" id="uploads" hidden>
     <header><span id="upTitle">Envois</span><button class="x" id="uploadsClose" aria-label="Fermer"><span data-icon="close"></span></button></header>
     <ul id="uploadList"></ul>
   </aside>
+</div>
+
+<!-- The search field: one element, placed by CSS. Centred and large on the home, hidden elsewhere
+     until it is called. It is never moved by script, which is what used to make it lose the caret. -->
+<div class="searchwrap" id="searchwrap">
+  <span class="search-ic" data-icon="search"></span>
+  <input id="search" placeholder="Chercher un film, une série, un écran…" autocomplete="off" spellcheck="false" enterkeyhint="search">
+  <button class="search-x" id="searchClear" hidden aria-label="Effacer"><span data-icon="close"></span></button>
 </div>
 
 <!-- ================= Réglages ================= -->

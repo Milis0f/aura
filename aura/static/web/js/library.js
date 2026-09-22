@@ -5,8 +5,9 @@ import * as viewer from "./viewer.js";
 const KIND_ICON = { film: "film", series: "stack", link: "link" };
 const KIND_LABEL = { film: "Film", series: "Série", link: "Lien" };
 const PAGE = 48;
-const lib = { kind: opt.libKind, sort: opt.libSort, all: Boolean(opt.libOffline), drive: "", q: "", offset: 0, total: 0, home: null };
-let heroBox, toolbar, rowsBox, gridHead, grid, moreBox;
+const lib = { kind: "all", sort: opt.libSort, all: Boolean(opt.libOffline), drive: "", q: "", offset: 0, total: 0,
+              home: null, facets: [], pick: null };
+let resumeBox, chips, gridHead, grid, moreBox;
 let gridToken = 0;
 let detailItem = null;
 let refreshTimer = null;
@@ -17,14 +18,13 @@ const hostOf = (url) => { try { return new URL(url).hostname.replace(/^www\./, "
 const plural = (n, word) => `${n} ${word}${n > 1 ? "s" : ""}`;
 
 export function mount(section) {
-  heroBox = h("div");
-  toolbar = h("div", { class: "lib-toolbar" });
-  rowsBox = h("div");
+  resumeBox = h("div", { class: "home-resume" });
+  chips = h("div", { class: "cat-chips" });
   gridHead = h("h2", { class: "section-title" });
   grid = h("div", { class: "poster-grid" });
   moreBox = h("div", { class: "lib-more" });
-  section.append(heroBox, toolbar, rowsBox, gridHead, grid, moreBox);
-  renderToolbar([]);
+  // The stage is a screen of its own: what you were watching, and the field. Nothing else competes.
+  section.append(h("section", { class: "home-stage" }, resumeBox), chips, gridHead, grid, moreBox);
 }
 
 export async function show(arg) {
@@ -39,20 +39,22 @@ export const query = () => lib.q;
 
 export function search(q) {
   lib.q = q;
-  if (lib.home) { renderHero(lib.home); renderRows(lib.home); }
   loadGrid(true);
 }
 
 async function refresh() {
-  if (!lib.home) heroBox.replaceChildren(h("div", { class: "sk sk-hero" }));
+  if (!lib.home) resumeBox.replaceChildren(h("div", { class: "sk sk-resume" }));
   try {
-    const home = await api(`/api/library/home${lib.all ? "?all=1" : ""}`);
+    const [home, facets] = await Promise.all([
+      api(`/api/library/home${lib.all ? "?all=1" : ""}`),
+      api(`/api/library/facets${lib.all ? "?all=1" : ""}`).catch(() => ({ facets: [] })),
+    ]);
     lib.home = home;
-    renderHero(home);
-    renderRows(home);
-    renderToolbar(home.drives);
+    lib.facets = facets.facets || [];
+    renderResume(home);
+    renderChips();
   } catch (error) {
-    heroBox.replaceChildren(emptyState("info", "Bibliothèque indisponible", error.message));
+    resumeBox.replaceChildren(emptyState("info", "Bibliothèque indisponible", error.message));
   }
   await loadGrid(true);
 }
@@ -90,7 +92,7 @@ function subline(it) {
   return [it.year, duration(it.runtime * 60 || it.duration)].filter(Boolean).join(" · ") || it.drives[0] || "Film";
 }
 
-/* ---------------------------------------------------------------- hero, rows, toolbar */
+/* ---------------------------------------------------------------- home */
 function onboarding(home) {
   const plugged = home.drives.some((d) => d.available);
   return emptyState("usb", plugged ? "Aucun film trouvé pour l'instant" : "Branche un disque dur",
@@ -107,69 +109,31 @@ function onboarding(home) {
     });
 }
 
-function renderHero(home) {
-  if (!home.total && !lib.all) { heroBox.replaceChildren(onboarding(home)); return; }
+/** What you were watching, above the field. One button: Reprendre. Where it plays is a setting,
+    not a decision to make every single time. */
+function renderResume(home) {
+  if (!home.total && !lib.all) { resumeBox.replaceChildren(onboarding(home)); return; }
   const it = home.hero;
-  if (!it || lib.q || lib.drive) { heroBox.replaceChildren(); return; }
-  const resume = Boolean(it.resume && !it.resume.finished && it.resume.position > 30);
+  if (!it) { resumeBox.replaceChildren(); return; }
+  const mark = it.resume && !it.resume.finished && it.resume.position > 30 ? it.resume : null;
   const art = it.backdrop || it.poster;
-  heroBox.replaceChildren(h("section", { class: "lib-hero rise" },
-    art ? h("div", { class: "bg", style: `background-image:url("${cssUrl(art)}")` }) : null,
-    h("div", { class: "veil" }),
-    h("div", { class: "txt" },
-      h("span", { class: "kicker" }, I(resume ? "play-circle" : "film"), resume ? "Reprendre" : "Ajouté récemment"),
-      h("h2", {}, it.title),
-      h("div", { class: "hero-meta" }, metaBits(it)),
-      it.overview ? h("p", { class: "hero-overview" }, it.overview) : null,
-      resume ? h("div", { class: "hero-progress" },
-        h("div", { class: "meter" }, h("i", { style: `width:${pct(it.resume.progress)}%` })),
-        h("small", { class: "muted num" }, `${clock(it.resume.position)} / ${clock(it.resume.duration)}`)) : null,
-      h("div", { class: "hero-actions" },
-        it.online ? h("button", { class: "btn primary", onclick: (e) => busy(e.currentTarget, () => playOnTv(it.id)) }, I("tv"), resume ? "Reprendre sur la TV" : "Lire sur la TV") : null,
-        it.online ? h("button", { class: "btn", onclick: () => playHere(it.id) }, I("play"), "Lire ici") : null,
-        h("button", { class: "btn ghost", onclick: () => openDetail(it.id) }, I("info"), "Détails"))),
-    h("div", { class: "art" }, h("div", { class: "frame" }, artImg(it)))));
+  const here = opt.playTarget === "here";
+  resumeBox.replaceChildren(h("article", { class: "resume rise" },
+    h("div", { class: "resume-art" }, artImg(it, art),
+      mark ? h("div", { class: "meter" }, h("i", { style: `width:${pct(mark.progress)}%` })) : null),
+    h("div", { class: "resume-txt" },
+      h("span", { class: "kicker" }, I(mark ? "play-circle" : "film"), mark ? "En cours" : "Dernier ajout"),
+      h("h2", { class: "resume-title" }, it.title),
+      h("div", { class: "resume-meta" }, metaBits(it)),
+      mark ? h("small", { class: "muted num" }, `${clock(mark.position)} / ${clock(mark.duration)}`) : null,
+      h("div", { class: "resume-actions" },
+        it.online ? h("button", {
+          class: "btn primary",
+          onclick: (e) => (here ? playHere(it.id) : busy(e.currentTarget, () => playOnTv(it.id))),
+        }, I(mark ? "play" : "play"), mark ? "Reprendre" : "Lire") : null,
+        h("button", { class: "btn ghost", onclick: () => openDetail(it.id) }, I("info"), "Détails")))));
 }
 
-function wideCard(it) {
-  const r = it.resume || {};
-  const left = r.duration ? Math.max(0, r.duration - r.position) : 0;
-  const parts = [r.episode ? episodeCode(r.season, r.episode) : "", r.position > 0 && left ? `${duration(left) || "moins d'une minute"} restantes` : "Épisode suivant"];
-  return h("button", { class: "wide-card", onclick: () => openDetail(it.id) },
-    h("div", { class: "wc-art" }, artImg(it, it.backdrop || it.poster), r.progress ? h("div", { class: "meter" }, h("i", { style: `width:${pct(r.progress)}%` })) : null),
-    h("div", { class: "wc-body" }, h("div", { class: "wc-title" }, it.title), h("div", { class: "wc-sub" }, parts.filter(Boolean).join(" · "))));
-}
-
-function renderRows(home) {
-  const resume = home.rows.find((row) => row.key === "continue");
-  if (!resume || lib.q || lib.drive) { rowsBox.replaceChildren(); return; }
-  rowsBox.replaceChildren(
-    h("h2", { class: "section-title" }, "Reprendre", h("span", { class: "count" }, String(resume.items.length))),
-    h("div", { class: "hscroll" }, resume.items.map((it, i) => stagger(wideCard(it), i))));
-}
-
-function renderToolbar(drives) {
-  const kinds = [["all", "Tout"], ["film", "Films"], ["series", "Séries"], ["link", "Liens"]];
-  const seg = h("div", { class: "seg" }, kinds.map(([key, label]) => h("button", {
-    class: lib.kind === key ? "is-active" : "",
-    onclick: () => { lib.kind = key; opt.libKind = key; saveOpt(); renderToolbar(drives); loadGrid(true); },
-  }, label)));
-  const pickDrive = (id) => { lib.drive = id; renderToolbar(drives); if (lib.home) { renderHero(lib.home); renderRows(lib.home); } loadGrid(true); };
-  const chips = drives.length > 1 || lib.drive ? h("div", { class: "chips-row" },
-    h("button", { class: `chip${lib.drive ? "" : " is-active"}`, onclick: () => pickDrive("") }, "Tous les disques"),
-    drives.map((d) => h("button", { class: `chip${lib.drive === d.id ? " is-active" : ""}`, onclick: () => pickDrive(d.id) },
-      I(d.kind === "folder" ? "folder" : "drive"), d.label, d.available ? null : h("span", { class: "dim" }, "débranché")))) : null;
-  const sort = h("select", { "aria-label": "Trier", onchange: (e) => { lib.sort = e.target.value; opt.libSort = lib.sort; saveOpt(); loadGrid(true); } },
-    [["added", "Récents"], ["title", "A à Z"], ["year", "Année"], ["rating", "Note"]].map(([value, label]) => h("option", { value, selected: lib.sort === value }, label)));
-  const offline = h("label", { class: "toggle" },
-    h("input", { type: "checkbox", class: "sw", checked: lib.all, onchange: (e) => { lib.all = e.target.checked; opt.libOffline = lib.all; saveOpt(); refresh(); } }),
-    "Disques débranchés");
-  toolbar.replaceChildren(...[seg, chips, h("span", { class: "spacer" }), offline, sort,
-    h("button", { class: "btn", onclick: () => addLink() }, I("link"), "Ajouter un lien"),
-    h("button", { class: "btn ghost icon-only", title: "Analyser les disques", "aria-label": "Analyser les disques", onclick: (e) => busy(e.currentTarget, rescan) }, I("scan"))].filter(Boolean));
-}
-
-/* ---------------------------------------------------------------- grid */
 function posterCard(it) {
   const inProgress = it.resume && !it.resume.finished && it.resume.progress > 0.01;
   const art = h("div", { class: "pc-art" },
@@ -187,6 +151,22 @@ function posterCard(it) {
     art, h("div", { class: "pc-meta" }, h("div", { class: "pc-title" }, it.title), h("div", { class: "pc-sub" }, subline(it))));
 }
 
+/** Only categories that hold something, so a shelf is never empty. Genres appear as the metadata
+    chain fills them in; type, decade, quality and language are read off the files and are always there. */
+function renderChips() {
+  const pick = lib.pick;
+  const same = (f) => pick && pick.facet === f.facet && pick.value === f.value;
+  const choose = (f) => { lib.pick = same(f) ? null : { facet: f.facet, value: f.value }; renderChips(); loadGrid(true); };
+  chips.replaceChildren(
+    h("button", { class: `chip${pick ? "" : " is-active"}`, onclick: () => { lib.pick = null; renderChips(); loadGrid(true); } },
+      "Tout", h("span", { class: "chip-n" }, String(lib.home ? lib.home.total : ""))),
+    ...lib.facets.map((f) => h("button", { class: `chip${same(f) ? " is-active" : ""}`, onclick: () => choose(f) },
+      f.label, h("span", { class: "chip-n" }, String(f.count)))),
+    h("span", { class: "spacer" }),
+    h("button", { class: "icon-btn", title: "Ajouter un lien", "aria-label": "Ajouter un lien", onclick: () => addLink() }, I("link")),
+    h("button", { class: "icon-btn", title: "Analyser les disques", "aria-label": "Analyser les disques", onclick: (e) => busy(e.currentTarget, rescan) }, I("scan")));
+}
+
 async function loadGrid(reset) {
   const token = ++gridToken;
   if (reset) {
@@ -195,7 +175,7 @@ async function loadGrid(reset) {
     moreBox.replaceChildren();
   }
   const params = new URLSearchParams({ sort: lib.sort, limit: String(PAGE), offset: String(lib.offset) });
-  if (lib.kind !== "all") params.set("kind", lib.kind);
+  if (lib.pick) params.set(lib.pick.facet === "kind" ? "kind" : lib.pick.facet, lib.pick.value);
   if (lib.q) params.set("q", lib.q);
   if (lib.drive) params.set("drive", lib.drive);
   if (lib.all) params.set("all", "1");
@@ -207,7 +187,9 @@ async function loadGrid(reset) {
   if (token !== gridToken) return;
   lib.total = data.total;
   if (reset) grid.replaceChildren();
-  const title = lib.q ? `Résultats pour « ${lib.q} »` : { all: "Tous les titres", film: "Films", series: "Séries", link: "Mes liens" }[lib.kind];
+  const title = lib.q ? `Résultats pour « ${lib.q} »`
+    : lib.pick ? (lib.facets.find((f) => f.facet === lib.pick.facet && f.value === lib.pick.value) || {}).label || "Titres"
+    : "Tous les titres";
   gridHead.replaceChildren(title, h("span", { class: "count" }, String(data.total)));
   const libraryEmpty = lib.home && !lib.home.total && !lib.all;
   gridHead.hidden = Boolean(libraryEmpty && !lib.q);
@@ -215,7 +197,7 @@ async function loadGrid(reset) {
     if (!libraryEmpty || lib.q) {
       grid.replaceChildren(lib.q
         ? emptyState("search", "Rien trouvé", "Essaie un autre mot, ou affiche aussi les disques débranchés.")
-        : emptyState("film", "Rien dans cette catégorie", lib.kind === "link" ? "Ajoute un film par lien : il sera lisible sur la TV comme ici." : "Change de filtre, ou copie des vidéos sur un disque."));
+        : emptyState("film", "Rien dans cette catégorie", "Change de catégorie, ou copie des vidéos sur un disque."));
     }
     moreBox.replaceChildren();
     return;

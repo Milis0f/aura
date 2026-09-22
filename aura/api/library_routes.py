@@ -65,9 +65,18 @@ def library_home(all: int = 0, _: Any = Depends(guard.home_or_account)) -> dict[
 @router.get("/library/items")
 def library_items(kind: str | None = None, q: str | None = None, drive: str | None = None,
                   sort: str = Query("added", pattern="^(added|title|year|rating)$"), limit: int = Query(60, ge=1, le=500),
-                  offset: int = Query(0, ge=0), all: int = 0, _: Any = Depends(guard.home_or_account)) -> dict[str, Any]:
-    items, total = library.items(kind, q, drive, sort, limit, offset, online_only=not all)
+                  offset: int = Query(0, ge=0), all: int = 0, genre: str | None = None,
+                  decade: str | None = None, quality: str | None = None, lang: str | None = None,
+                  _: Any = Depends(guard.home_or_account)) -> dict[str, Any]:
+    items, total = library.items(kind, q, drive, sort, limit, offset, online_only=not all,
+                                 genre=genre, decade=decade, quality=quality, lang=lang)
     return {"items": items, "total": total, "offset": offset, "limit": limit}
+
+
+@router.get("/library/facets")
+def library_facets(all: int = 0, _: Any = Depends(guard.home_or_account)) -> dict[str, Any]:
+    """The category buttons, each with its count. Only facets that hold something are returned."""
+    return {"facets": library.facets(online_only=not all)}
 
 
 @router.get("/library/items/{item_id}")

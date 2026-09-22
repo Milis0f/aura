@@ -304,3 +304,32 @@ def test_leaving_developer_mode_through_the_api_restores_defaults(local):
     from aura.core import settings as registry
     assert registry.get("cards.enrich_parallel") == 6
     assert registry.developer_on() is False
+
+
+def test_categories_come_from_the_data_that_exists(local, media):
+    """Genres need a metadata source and are usually missing; type, decade, quality and language are
+    read off the files, so the shelves are never empty."""
+    _owner(local)
+    facets = local.get("/api/library/facets").json()["facets"]
+    kinds = {f["facet"] for f in facets}
+    assert "kind" in kinds and "decade" in kinds
+    assert all(f["count"] > 0 for f in facets), "a category with nothing in it is worse than no category"
+
+    decade = next(f for f in facets if f["facet"] == "decade")
+    filtered = local.get(f"/api/library/items?decade={decade['value']}").json()
+    assert filtered["total"] == decade["count"]
+    for item in filtered["items"]:
+        assert item["year"].startswith(decade["value"][:3])
+
+
+def test_a_genre_filter_does_not_match_a_longer_name(local, media):
+    """The genres column is a JSON array, so "Drama" must not also bring back "Dramedy"."""
+    _owner(local)
+    from aura import db
+    scanned = local.get("/api/library/items?all=1").json()["items"]
+    assert scanned, "the media fixture should have produced at least one title"
+    db.execute("UPDATE media_items SET genres = ?", ('["Dramedy"]',))
+    db.execute("UPDATE media_items SET genres = ? WHERE id = ?", ('["Drama"]', scanned[0]["id"]))
+
+    assert local.get("/api/library/items?genre=Drama&all=1").json()["total"] == 1
+    assert local.get("/api/library/items?genre=Dramedy&all=1").json()["total"] == len(scanned) - 1

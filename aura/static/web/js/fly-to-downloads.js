@@ -11,7 +11,8 @@ import { $ } from "./core.js";
 const FLIGHT_MS = 620;
 
 export function flyToDownloads(source) {
-  const target = $('.rail-btn[data-view="downloads"] .i') || $('.tab[data-view="downloads"] .i');
+  // With the bars gone, the one button always on screen is where a download visibly lands.
+  const target = $("#openSearch");
   if (!source || !target || !source.isConnected) return bump(target);
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return bump(target);
 
@@ -43,8 +44,7 @@ export function flyToDownloads(source) {
 }
 
 /** The icon acknowledges the arrival, even when the flight could not run. */
-function bump(target) {
-  const button = target ? target.closest(".rail-btn, .tab") : null;
+function bump(button) {
   if (!button) return;
   button.classList.remove("dl-land");
   void button.offsetWidth; // restart the animation when two downloads land in a row
