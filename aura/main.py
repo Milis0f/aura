@@ -202,7 +202,9 @@ def create_app() -> FastAPI:
 
     app.mount("/vendor", RevalidatingStatic(directory=STATIC_DIR / "vendor"), name="vendor")
     app.mount("/shared", RevalidatingStatic(directory=STATIC_DIR / "shared"), name="shared")
-    app.mount("/web", RevalidatingStatic(directory=STATIC_DIR / "web", html=True), name="web")
+    # html=False on purpose: /web/ serves the stylesheet and the modules, not a second copy of the
+    # application. There is one address for the interface, and it is "/".
+    app.mount("/web", RevalidatingStatic(directory=STATIC_DIR / "web"), name="web")
     app.mount("/tv", RevalidatingStatic(directory=STATIC_DIR / "tv", html=True), name="tv")
     app.mount("/remote", RevalidatingStatic(directory=STATIC_DIR / "remote", html=True), name="remote")
     return app

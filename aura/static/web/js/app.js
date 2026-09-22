@@ -4,12 +4,13 @@ import * as searchOverlay from "./search-overlay.js";
 import * as auth from "./auth.js";
 import * as viewer from "./viewer.js";
 import * as library from "./library.js";
+import * as live from "./live.js";
 import * as drives from "./drives.js";
 import * as files from "./files.js";
 import * as downloads from "./torrents.js";
 import * as system from "./system.js";
 
-const VIEWS = { library, drives, files, downloads, system };
+const VIEWS = { library, live, drives, files, downloads, system };
 const HINTS = { files: "Rechercher dans cet emplacement" };
 const mounted = new Set();
 let serverSettings = {};
@@ -50,6 +51,7 @@ $("#searchClear").addEventListener("click", () => {
     all it takes for it to become reachable - there is no menu to remember to update. */
 export const SCREENS = [
   { view: "library", label: "Bibliothèque", icon: "film" },
+  { view: "live", label: "Direct", icon: "signal" },
   { view: "drives", label: "Disques", icon: "drive" },
   { view: "files", label: "Fichiers", icon: "folder" },
   { view: "downloads", label: "Téléchargements", icon: "download", needs: "canTorrent" },

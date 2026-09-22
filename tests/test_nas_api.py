@@ -333,3 +333,12 @@ def test_a_genre_filter_does_not_match_a_longer_name(local, media):
 
     assert local.get("/api/library/items?genre=Drama&all=1").json()["total"] == 1
     assert local.get("/api/library/items?genre=Dramedy&all=1").json()["total"] == len(scanned) - 1
+
+
+def test_the_interface_has_one_address(local):
+    """/web/ used to serve a second copy of the application, so the same box answered at two URLs.
+    Its assets still have to be reachable - the page references them."""
+    assert local.get("/").status_code == 200
+    assert local.get("/web/").status_code == 404
+    assert local.get("/web/web.css").status_code == 200
+    assert local.get("/web/js/app.js").status_code == 200
