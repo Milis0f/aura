@@ -794,7 +794,7 @@
   setInterval(updateNet, 30000);
   setInterval(() => { if (state.setupMode && state.view === "home") go("home", null, false); }, 10000);
   setInterval(() => { if (state.playing && state.playing.kind === "live") updateNow(state.playing); }, 60000);
-  // The accent chosen in the web app (Réglages › Apparence) applies to the TV too.
-  const applyAccent = () => api("/settings").then((d) => { document.documentElement.dataset.accent = (d.settings && d.settings.ui_accent) || "amber"; }).catch(() => {});
+  // Nothing to theme any more: the palette is black and white everywhere.
+  const applyAccent = () => {};
   window.AuraIcons.hydrate(); applyAccent(); updateNet(); connectWs(); go("home", null, false);
 })();

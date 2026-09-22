@@ -1,5 +1,5 @@
 /* Aura web — boot, navigation, settings panel, live events from the box. */
-import { $, $$, h, api, state, opt, saveOpt, applyOpts, ACCENTS, events, toast, hydrate, spatialMove, topLayer, debounce } from "./core.js";
+import { $, $$, h, api, state, opt, saveOpt, applyOpts, events, toast, hydrate, spatialMove, topLayer, debounce } from "./core.js";
 import * as auth from "./auth.js";
 import * as viewer from "./viewer.js";
 import * as library from "./library.js";
@@ -59,17 +59,7 @@ if (isPhone()) $("#rail").hidden = true;
 /* ---------------------------------------------------------------- settings */
 async function syncServerSettings() {
   try { serverSettings = (await api("/api/settings")).settings || {}; } catch { return; }
-  const accent = serverSettings.ui_accent;
-  if (accent && ACCENTS[accent] && accent !== opt.accent) { opt.accent = accent; saveOpt(); applyOpts(); }
   if (!$("#settings").hidden) buildSettings();
-}
-
-async function setAccent(name) {
-  opt.accent = name;
-  saveOpt();
-  applyOpts();
-  buildSettings();
-  try { await api("/api/settings", { method: "PUT", json: { values: { ui_accent: name } } }); } catch { /* the choice still applies here */ }
 }
 
 function bind(selector, key, isCheck = false, after = null) {
@@ -99,10 +89,6 @@ function serverToggle(selector, key) {
 }
 
 function buildSettings() {
-  $("#swatches").replaceChildren(...Object.entries(ACCENTS).map(([name, hex]) => h("button", {
-    type: "button", class: `sw-dot${opt.accent === name ? " is-active" : ""}`, style: `background:${hex}`,
-    "aria-label": `Accent ${name}`, title: name, onclick: () => setAccent(name),
-  })));
   bind("#optDensity", "density");
   bind("#optAurora", "aurora", true);
   bind("#optTv", "tv", true);

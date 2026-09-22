@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="fr" data-accent="amber">
+<html lang="fr">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -23,12 +23,6 @@
     <div class="gate-story">
       <div class="gate-mark" aria-hidden="true"><span></span><span></span><span></span></div>
       <h1>Aura</h1>
-      <p class="gate-lede">Tes films, tes séries, tes disques et la télé du salon, au même endroit.</p>
-      <ul class="gate-points">
-        <li><span data-icon="usb"></span><div><b>Branche un disque</b><small>Aura le voit, trouve les films et les range tout seul.</small></div></li>
-        <li><span data-icon="tv"></span><div><b>Lis où tu veux</b><small>Sur la TV en un geste, ou ici même, avec reprise de lecture.</small></div></li>
-        <li><span data-icon="shield"></span><div><b>Tes fichiers protégés</b><small>Compte, double authentification, journal d'activité.</small></div></li>
-      </ul>
       <a class="gate-remote" href="/remote/"><span data-icon="remote"></span>Télécommande sans compte</a>
     </div>
 
@@ -87,13 +81,13 @@
   </header>
 
   <nav class="rail" id="rail">
-    <button class="rail-btn" data-view="library"><span data-icon="film"></span><span>Bibliothèque</span></button>
-    <button class="rail-btn" data-view="drives"><span data-icon="drive"></span><span>Disques</span><em class="badge num" id="driveBadge" hidden></em></button>
-    <button class="rail-btn" data-view="files"><span data-icon="folder"></span><span>Fichiers</span></button>
-    <button class="rail-btn" data-view="downloads"><span data-icon="download"></span><span>Téléchargements</span><em class="badge num" id="dlBadge" hidden></em></button>
-    <button class="rail-btn" data-view="system"><span data-icon="gauge"></span><span>Système</span></button>
+    <button class="rail-btn" data-view="library"><span data-icon="film"></span><span class="rail-label">Bibliothèque</span></button>
+    <button class="rail-btn" data-view="drives"><span data-icon="drive"></span><span class="rail-label">Disques</span><em class="badge num" id="driveBadge" hidden></em></button>
+    <button class="rail-btn" data-view="files"><span data-icon="folder"></span><span class="rail-label">Fichiers</span></button>
+    <button class="rail-btn" data-view="downloads"><span data-icon="download"></span><span class="rail-label">Téléchargements</span><em class="badge num" id="dlBadge" hidden></em></button>
+    <button class="rail-btn" data-view="system"><span data-icon="gauge"></span><span class="rail-label">Système</span></button>
     <div class="rail-foot">
-      <a class="rail-link" href="/remote/"><span data-icon="remote"></span><span>Télécommande TV</span></a>
+      <a class="rail-link" href="/remote/"><span data-icon="remote"></span><span class="rail-label">Télécommande TV</span></a>
       <div class="who"><span data-icon="user"></span><span id="who"></span></div>
       <button class="btn ghost wide" id="logoutBtn"><span data-icon="logout"></span>Se déconnecter</button>
     </div>
@@ -128,7 +122,6 @@
   <div class="panel-body">
     <section class="group">
       <h3>Apparence</h3>
-      <div class="opt"><span>Couleur d'accent<small>Aussi sur la TV et la télécommande</small></span><span class="swatches" id="swatches"></span></div>
       <label class="opt"><span>Densité des listes</span><select id="optDensity"><option value="cosy">Confortable</option><option value="compact">Compacte</option></select></label>
       <label class="opt"><span>Aurore animée</span><input type="checkbox" id="optAurora" class="sw"></label>
       <label class="opt"><span>Mode téléviseur<small>Grandes cibles, navigation aux flèches</small></span><input type="checkbox" id="optTv" class="sw"></label>

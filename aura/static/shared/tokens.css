@@ -1,6 +1,13 @@
 /* Aura — shared design tokens, fonts and primitives for the TV page, the phone remote and the web app.
-   Palette: the NAS night. Deep blue-black ground, slate surfaces, 1px lines, one accent chosen by the owner
-   (amber by default) that also tints the aurora. No pure black, no white surfaces. */
+   Palette: black, and the film. The ground is true #000 so an OLED panel switches those pixels off and the
+   posters look like they float; everything the interface draws for itself is neutral grey, so the only
+   colour on screen comes from the artwork.
+
+   Two colours survive, and only where they carry meaning, never decoration:
+     --danger   something broke or is about to be destroyed
+     --dl       a download is moving
+   Anything else that used to be coloured (active, live, warning, selected) is told apart by white
+   intensity, weight and iconography instead. */
 
 @font-face {
   font-family: "Geist";
@@ -16,43 +23,47 @@
 }
 
 :root {
-  --ground-0: #07090d;
-  --ground-1: #0a0d12;
-  --ground-2: #0e131b;
-  --surface: #111621;
-  --surface-2: #161d2a;
-  --surface-3: #1b2331;
-  --line: #1e2634;
-  --line-soft: #171e2a;
+  --ground-0: #000000;
+  --ground-1: #000000;
+  --ground-2: #050505;
+  --surface: #0b0b0b;
+  --surface-2: #131313;
+  --surface-3: #1b1b1b;
+  --line: #222222;
+  --line-soft: #161616;
 
-  --ink: #e6eaf0;
-  --ink-2: #a6afbd;
-  --ink-3: #7e8899;
-  --ink-4: #5a6474;
+  --ink: #f4f4f4;
+  --ink-2: #aaaaaa;
+  --ink-3: #7d7d7d;
+  --ink-4: #585858;
   --muted: var(--ink-3);
   --dim: var(--ink-4);
 
-  --fill-1: rgba(148, 170, 205, 0.045);
-  --fill-2: rgba(148, 170, 205, 0.08);
-  --fill-3: rgba(148, 170, 205, 0.13);
-  --line-1: rgba(148, 170, 205, 0.11);
-  --line-2: rgba(148, 170, 205, 0.2);
-  --refract: inset 0 1px 0 rgba(200, 215, 240, 0.06);
+  /* Neutral white alphas: a blue-tinted fill over true black reads as a colour cast. */
+  --fill-1: rgba(255, 255, 255, 0.04);
+  --fill-2: rgba(255, 255, 255, 0.07);
+  --fill-3: rgba(255, 255, 255, 0.12);
+  --line-1: rgba(255, 255, 255, 0.1);
+  --line-2: rgba(255, 255, 255, 0.18);
+  --refract: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 
-  --accent: #f2b45a;
-  --accent-hi: #ffd08a;
-  --accent-ink: #231603;
-  --accent-soft: rgba(242, 180, 90, 0.15);
-  --accent-rgb: 242, 180, 90;
+  /* "Accent" is now simply white: the brightest thing the interface can be. Kept under the old names so
+     every existing rule and the --accent-rgb alpha tricks keep working. */
+  --accent: #ffffff;
+  --accent-hi: #ffffff;
+  --accent-ink: #000000;
+  --accent-soft: rgba(255, 255, 255, 0.1);
+  --accent-rgb: 255, 255, 255;
 
-  --live: #ff6b6b;
-  --danger: #ff6b6b;
+  --live: #f4f4f4;   /* the pulse animation says "live", not a colour */
+  --danger: #ff4d4d;
   --danger-ink: #ffb4b4;
-  --ok: #4ade9b;
-  --warn: #ffb454;
+  --dl: #35d07f;     /* downloads only */
+  --ok: var(--dl);
+  --warn: #f4f4f4;   /* a warning is white text and an icon; red is reserved for real failures */
 
-  --shadow-1: 0 10px 28px -14px rgba(2, 4, 8, 0.8);
-  --shadow-2: 0 30px 70px -30px rgba(2, 4, 8, 0.9);
+  --shadow-1: 0 10px 28px -14px rgba(0, 0, 0, 0.9);
+  --shadow-2: 0 30px 70px -30px rgba(0, 0, 0, 1);
 
   --r: 14px;
   --r-sm: 10px;
@@ -62,20 +73,14 @@
   color-scheme: dark;
 }
 
-[data-accent="cyan"] { --accent: #2dd4bf; --accent-hi: #6fe7da; --accent-ink: #04201c; --accent-soft: rgba(45, 212, 191, 0.15); --accent-rgb: 45, 212, 191; }
-[data-accent="blue"] { --accent: #4c8dff; --accent-hi: #7fb0ff; --accent-ink: #04101f; --accent-soft: rgba(76, 141, 255, 0.15); --accent-rgb: 76, 141, 255; }
-[data-accent="violet"] { --accent: #a78bfa; --accent-hi: #c4b0ff; --accent-ink: #150a2e; --accent-soft: rgba(167, 139, 250, 0.16); --accent-rgb: 167, 139, 250; }
-[data-accent="rose"] { --accent: #fb7185; --accent-hi: #ffa0ac; --accent-ink: #2c060d; --accent-soft: rgba(251, 113, 133, 0.15); --accent-rgb: 251, 113, 133; }
-[data-accent="lime"] { --accent: #a3e635; --accent-hi: #c4f06e; --accent-ink: #152003; --accent-soft: rgba(163, 230, 53, 0.14); --accent-rgb: 163, 230, 53; }
-
-/* ---- ground + aurora: one fixed layer, moved with transform only, never repainted while scrolling ---- */
+/* ---- ground: true black, with one faint white bloom that breathes with activity ---- */
 .aura-ground {
   position: fixed;
   inset: 0;
   z-index: -2;
   overflow: hidden;
   pointer-events: none;
-  background: linear-gradient(180deg, var(--ground-1) 0%, var(--ground-1) 55%, var(--ground-0) 100%);
+  background: var(--ground-0);
 }
 .aura-ground::before {
   content: "";
@@ -85,10 +90,11 @@
   right: -22%;
   height: 96vh;
   background:
-    radial-gradient(38% 52% at 26% 58%, rgba(var(--accent-rgb), 0.3), transparent 70%),
-    radial-gradient(34% 46% at 70% 48%, rgba(var(--accent-rgb), 0.17), transparent 70%),
-    radial-gradient(60% 58% at 50% 62%, rgba(var(--accent-rgb), 0.09), transparent 75%);
-  opacity: calc(0.5 + var(--glow, 0) * 0.5);
+    radial-gradient(38% 52% at 26% 58%, rgba(255, 255, 255, 0.05), transparent 70%),
+    radial-gradient(34% 46% at 70% 48%, rgba(255, 255, 255, 0.032), transparent 70%),
+    radial-gradient(60% 58% at 50% 62%, rgba(255, 255, 255, 0.018), transparent 75%);
+  /* --glow is driven by download throughput: the panel lifts slightly while the box is working. */
+  opacity: calc(0.35 + var(--glow, 0) * 0.65);
   -webkit-mask-image: linear-gradient(to bottom, #000 28%, transparent 100%);
   mask-image: linear-gradient(to bottom, #000 28%, transparent 100%);
   transition: opacity 1.6s var(--ease);
@@ -99,8 +105,8 @@
   content: "";
   position: absolute;
   inset: 0;
-  opacity: 0.2;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .8 0 0 0 0 .85 0 0 0 0 .95 0 0 0 .06 0'/></filter><rect width='180' height='180' filter='url(%23n)'/></svg>");
+  opacity: 0.16;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .9 0 0 0 0 .9 0 0 0 0 .9 0 0 0 .05 0'/></filter><rect width='180' height='180' filter='url(%23n)'/></svg>");
 }
 .no-aurora .aura-ground::before { display: none; }
 .playing .aura-ground::before { animation-play-state: paused; }
@@ -130,7 +136,7 @@
   position: absolute;
   inset: 0;
   transform: translateX(-100%);
-  background: linear-gradient(90deg, transparent, rgba(200, 215, 240, 0.06), transparent);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.07), transparent);
   animation: aura-sweep 1.6s var(--ease) infinite;
 }
 

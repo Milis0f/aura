@@ -31,9 +31,8 @@ export const stagger = (el, index) => {
 /* ---------------------------------------------------------------- state, options, events */
 export const state = { csrf: "", user: "", canWrite: false, canTorrent: false, has2fa: false, zone: "lan", version: "", jellyfin: "", view: "", player: null };
 
-export const ACCENTS = { amber: "#f2b45a", cyan: "#2dd4bf", rose: "#fb7185", lime: "#a3e635", blue: "#4c8dff", violet: "#a78bfa" };
 const DEFAULTS = {
-  accent: "amber", density: "cosy", aurora: true, tv: false, hidden: false, confirm: true, sort: "name", desc: false,
+  density: "cosy", aurora: true, tv: false, hidden: false, confirm: true, sort: "name", desc: false,
   grid: false, category: "Films", refresh: 3000, playTarget: "tv", libKind: "all", libSort: "added", libOffline: false,
 };
 export const opt = (() => {
@@ -44,7 +43,6 @@ export function saveOpt() {
 }
 export function applyOpts() {
   const root = document.documentElement;
-  root.dataset.accent = ACCENTS[opt.accent] ? opt.accent : "amber";
   root.dataset.density = opt.density;
   document.body.classList.toggle("no-aurora", !opt.aurora);
   document.body.classList.toggle("tv", Boolean(opt.tv));
