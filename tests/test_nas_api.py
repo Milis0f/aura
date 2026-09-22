@@ -260,3 +260,47 @@ def test_torrent_file_only_relays_links_the_box_itself_produced(local):
     assert local.get("/api/torrents/file/never-searched-for-this").status_code == 404
     torrent_search.remember([{"id": "ia:sintel", "name": "Sintel/2010", "torrent_url": "https://archive.test/s.torrent"}])
     assert torrent_search.recall("ia:sintel") == ("https://archive.test/s.torrent", "Sintel/2010")
+
+
+def test_settings_schema_drives_the_interface(local):
+    """The panel renders from this, so a setting appears because it was declared, not because
+    someone remembered to add a row of HTML."""
+    csrf = _owner(local)
+    answer = local.get("/api/settings/schema").json()
+    assert answer["developer"] is False
+    keys = {entry["key"] for entry in answer["settings"]}
+    assert "automount" in keys
+    assert "search.timeout_seconds" not in keys  # developer scope, absent while the mode is off
+
+    assert local.put("/api/settings", json={"values": {"developer.enabled": "1"}}, headers=csrf).status_code == 200
+    answer = local.get("/api/settings/schema").json()
+    assert answer["developer"] is True
+    entry = next(e for e in answer["settings"] if e["key"] == "search.timeout_seconds")
+    assert entry["kind"] == "float" and entry["minimum"] == 1.0 and entry["maximum"] == 60.0
+    assert entry["group"] == "Recherche" and entry["help"]
+
+
+def test_a_refused_setting_says_which_one_and_why(local):
+    csrf = _owner(local)
+    local.put("/api/settings", json={"values": {"developer.enabled": "1"}}, headers=csrf)
+
+    refused = local.put("/api/settings", json={"values": {"search.timeout_seconds": "999"}}, headers=csrf)
+    assert refused.status_code == 400
+    assert "Délai réseau" in refused.json()["detail"] and "60" in refused.json()["detail"]
+
+    assert local.put("/api/settings", json={"values": {"inventé": "1"}}, headers=csrf).status_code == 400
+    # and nothing was stored on the way through
+    entry = next(e for e in local.get("/api/settings/schema").json()["settings"]
+                 if e["key"] == "search.timeout_seconds")
+    assert entry["value"] == 12.0
+
+
+def test_leaving_developer_mode_through_the_api_restores_defaults(local):
+    csrf = _owner(local)
+    local.put("/api/settings", json={"values": {"developer.enabled": "1"}}, headers=csrf)
+    local.put("/api/settings", json={"values": {"cards.enrich_parallel": "16"}}, headers=csrf)
+    assert local.put("/api/settings", json={"values": {"developer.enabled": "0"}}, headers=csrf).status_code == 200
+
+    from aura.core import settings as registry
+    assert registry.get("cards.enrich_parallel") == 6
+    assert registry.developer_on() is False

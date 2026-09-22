@@ -22,10 +22,12 @@ from typing import Any
 
 import httpx
 
+from ..core import settings
 from . import tmdb
 
 log = logging.getLogger(__name__)
 
+# Declared in core.settings; these are the fallbacks the registry returns when nothing is stored.
 ENRICH_BUDGET = 24  # cards that get a metadata lookup; the rest fall back to initials
 ENRICH_PARALLEL = 6
 ENRICH_SECONDS = 10.0
@@ -116,16 +118,20 @@ async def _fill(http: httpx.AsyncClient, card: dict[str, Any], gate: asyncio.Sem
     })
 
 
-async def enrich(http: httpx.AsyncClient, cards: list[dict[str, Any]], budget: int = ENRICH_BUDGET) -> list[dict[str, Any]]:
+async def enrich(http: httpx.AsyncClient, cards: list[dict[str, Any]], budget: int | None = None) -> list[dict[str, Any]]:
     """Best effort: no key, or a catalogue that is slow or down, leaves the cards on their fallback art."""
     if not tmdb.api_key():
         return cards
-    gate = asyncio.Semaphore(ENRICH_PARALLEL)
+    # Read once per call, not per card: the registry is a dict lookup but a loop is a loop.
+    if budget is None:
+        budget = int(settings.get("cards.enrich_budget"))
+    deadline = float(settings.get("cards.enrich_seconds"))
+    gate = asyncio.Semaphore(int(settings.get("cards.enrich_parallel")))
     tasks = [_fill(http, card, gate) for card in cards[:budget]]
     if not tasks:
         return cards
     try:
-        await asyncio.wait_for(asyncio.gather(*tasks, return_exceptions=True), ENRICH_SECONDS)
+        await asyncio.wait_for(asyncio.gather(*tasks, return_exceptions=True), deadline)
     except TimeoutError:
-        log.info("card enrichment timed out after %.0fs", ENRICH_SECONDS)
+        log.info("card enrichment timed out after %.0fs", deadline)
     return cards

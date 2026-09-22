@@ -329,11 +329,22 @@ def get_setting(key: str, default: str = "") -> str:
     return row["value"] if row else default
 
 
+# Bumped on every settings write. core.settings caches coerced values and watches this counter, so a
+# value changed by any code path - including one that never heard of the registry - invalidates it.
+_settings_version = 0
+
+
+def settings_version() -> int:
+    return _settings_version
+
+
 def set_setting(key: str, value: str) -> None:
+    global _settings_version
     execute(
         "INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
         (key, value),
     )
+    _settings_version += 1
 
 
 def all_settings() -> dict[str, str]:

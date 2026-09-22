@@ -20,6 +20,7 @@ from urllib.parse import quote, urlparse
 import httpx
 
 from ..config import SETTINGS
+from ..core import settings
 from . import tmdb, torrent_cards
 
 log = logging.getLogger(__name__)
@@ -29,6 +30,8 @@ _RECENT: dict[str, tuple[str, str]] = {}
 
 ARCHIVE_SEARCH = "https://archive.org/advancedsearch.php"
 ARCHIVE_FIELDS = ("identifier", "title", "item_size", "publicdate", "downloads")
+# Declared in core.settings and tunable from developer mode; these stay as the fallback the registry
+# hands back when nothing is stored.
 MIN_QUERY = 2
 TIMEOUT_SECONDS = 12.0
 DEFAULT_LIMIT = 30
@@ -170,7 +173,7 @@ async def _search_archive(http: httpx.AsyncClient, query: str, limit: int) -> li
     params: list[tuple[str, str]] = [("q", query)]
     params += [("fl[]", field) for field in ARCHIVE_FIELDS]
     params += [("rows", str(limit)), ("page", "1"), ("output", "json")]
-    response = await http.get(ARCHIVE_SEARCH, params=params, timeout=TIMEOUT_SECONDS)
+    response = await http.get(ARCHIVE_SEARCH, params=params, timeout=settings.get("search.timeout_seconds"))
     response.raise_for_status()
     docs = (response.json() or {}).get("response", {}).get("docs", [])
     results = []
@@ -205,7 +208,7 @@ async def _search_indexer(http: httpx.AsyncClient, query: str, limit: int) -> li
     }
     if SETTINGS.indexer_key:
         params["apikey"] = SETTINGS.indexer_key
-    response = await http.get(url, params=params, timeout=TIMEOUT_SECONDS)
+    response = await http.get(url, params=params, timeout=settings.get('search.timeout_seconds'))
     response.raise_for_status()
     rows = _records(response.json())
     return [row for row in (normalise(raw) for raw in rows) if row]
@@ -275,8 +278,8 @@ def recall(result_id: str) -> tuple[str, str] | None:
 async def search(http: httpx.AsyncClient, query: str, limit: int = DEFAULT_LIMIT) -> dict[str, Any]:
     """Every configured source at once. A source that fails is reported, it never empties the answer."""
     query = query.strip()
-    limit = max(1, min(limit, MAX_LIMIT))
-    if len(query) < MIN_QUERY:
+    limit = max(1, min(limit, int(settings.get("search.max_limit"))))
+    if len(query) < int(settings.get("search.min_query")):
         return {"results": [], "sources": sources(), "errors": []}
 
     configured = sources()

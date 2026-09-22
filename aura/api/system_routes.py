@@ -7,12 +7,14 @@ import logging
 import time
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
 from .. import db
 from ..config import SETTINGS
+from ..core import settings as registry
 from ..services import catalog, library, network, system
+from . import guard
 from .state import AppState, state_of
 
 log = logging.getLogger(__name__)
@@ -113,14 +115,44 @@ def get_settings() -> dict[str, Any]:
     return {"settings": out}
 
 
+@router.get("/settings/schema")
+def settings_schema() -> dict[str, Any]:
+    """What the settings screen renders itself from. Developer entries are absent unless the mode is on."""
+    return {"settings": registry.schema(), "developer": registry.developer_on()}
+
+
 @router.put("/settings")
-async def put_settings(body: SettingsIn, st: AppState = Depends(state_of)) -> dict[str, Any]:
-    for k, v in body.values.items():
+async def put_settings(request: Request, body: SettingsIn, st: AppState = Depends(state_of)) -> dict[str, Any]:
+    declared = {k: v for k, v in body.values.items() if k in registry.BY_KEY}
+    legacy = {k: v for k, v in body.values.items() if k not in registry.BY_KEY}
+
+    # A developer knob can make the box behave in ways nobody else can explain: it needs a real account
+    # with write rights, where an ordinary setting keeps the access it has always had.
+    if any(registry.BY_KEY[k].scope == registry.DEVELOPER for k in declared):
+        guard.need_write(request)
+
+    leaving_developer = (
+        registry.DEVELOPER_KEY in declared
+        and registry.developer_on()
+        and not registry.BY_KEY[registry.DEVELOPER_KEY].coerce(declared[registry.DEVELOPER_KEY])
+    )
+
+    for k, v in declared.items():
+        if registry.BY_KEY[k].secret and v == "":
+            continue  # an empty secret means "keep the one you have"
+        try:
+            registry.put(k, v)
+        except ValueError as exc:
+            raise HTTPException(400, f"{registry.BY_KEY[k].label} : {exc}") from exc
+
+    for k, v in legacy.items():
         if k not in PUBLIC_SETTINGS:
             raise HTTPException(400, f"réglage inconnu : {k}")
-        if k == "tmdb_api_key" and v == "":
-            continue
         db.set_setting(k, str(v)[:500])
+
+    if leaving_developer:
+        registry.reset_scope(registry.DEVELOPER)
+
     await st.hub.broadcast({"type": "settings_changed"})
     return get_settings()
 
